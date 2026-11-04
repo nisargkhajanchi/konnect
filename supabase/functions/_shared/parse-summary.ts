@@ -150,7 +150,9 @@ export function parseMedicineLine(raw: string, page: number | null, inMedSection
 /* ---------------- the whole document ---------------- */
 
 const SPECIALTIES = 'cardiology|neurology|medicine|general medicine|surgery|general surgery|orthop(a)?edics?|nephrology|endocrinology|diabetology|pulmonology|chest medicine|gastroenterology|oncology|neurosurgery|urology|gyn(a)?ecology|obstetrics|p(a)?ediatrics|ent|ophthalmology|physiotherapy|psychiatry|dermatology|cardiothoracic|rheumatology|haematology|hematology';
-const DOCTOR = /\bDr\.?\s*([A-Z][A-Za-z.]*(?:\s+[A-Z][A-Za-z.]*){0,3})/;
+// Single spaces only between name parts: a wide gap in the PDF means the next column has started.
+const DOCTOR = /\bDr\.?\s*([A-Z][A-Za-z.]*(?: [A-Z][A-Za-z.]*){0,3})/;
+const NOT_NAME = /\s+(Department|Dept|Unit|Ward|Consultant|Physician|Signature|Designation|Mbbs|Md|Ms|Dm|Dnb|Frcp)\b.*$/i;
 const STOP_AFTER_NAME = /\s{2,}|\s+(?:age|sex|gender|uhid|ip\s*no|mrn|reg(?:istration)?|ward|bed|dob)\b|[,;|]|$/i;
 
 function after(text: string, label: RegExp): string | null {
@@ -181,7 +183,7 @@ export function parseSummary(lines: PageLine[]): Extraction {
   const dischargeDate = dischargeLine ? findDate(after(dischargeLine.text, /(date\s+of\s+discharge|discharge\s+date|discharged\s+on|\bd\.?o\.?d\b\.?)/i) ?? '') : null;
   const doctorLine = lines.find((l) => /\b(consultant|treating\s+(doctor|physician)|attending\s+(doctor|physician)|under\s+(the\s+care\s+of)?|doctor\s+in\s+charge|physician)\b/i.test(l.text) && DOCTOR.test(l.text));
   const doctorM = DOCTOR.exec(doctorLine?.text ?? flat);
-  const doctor = doctorM ? `Dr. ${doctorM[1].replace(/\s*\(.*$/, '').trim()}` : null;
+  const doctor = doctorM ? `Dr. ${doctorM[1].replace(/\s*\(.*$/, '').replace(NOT_NAME, '').trim()}` : null;
 
   /* walk the lines section by section */
   let section: Section = 'other';
@@ -192,6 +194,20 @@ export function parseSummary(lines: PageLine[]): Extraction {
   const warnings: Sourced[] = [];
   const followLines: PageLine[] = [];
   const allergies: Sourced[] = [];
+  let lastMed: { raw: string; index: number } | null = null;
+
+  /**
+   * PDFs wrap long sentences onto the next line. A line continues the previous item when it isn't a
+   * new bullet and either starts in lower case or the previous item stops mid-sentence.
+   */
+  const continues = (raw: string, prev: string | undefined) =>
+    !!prev && !BULLET.test(raw) && !/[.!?:]$/.test(prev) &&
+    (/^[a-z(]/.test(raw.trim()) || /(,|;|\b(and|or|avoid|with|of|to|the|a|an|for|in|on|if|not|no|than))$/i.test(prev));
+  const pushOrJoin = (list: Sourced[], raw: string, page: number) => {
+    const last = list[list.length - 1];
+    if (last && continues(raw, last.text)) last.text = `${last.text} ${clean(raw).replace(/[.;]+$/, '')}`;
+    else list.push({ text: cap(clean(raw)), source_page: page });
+  };
 
   for (const l of lines) {
     const t = l.text.trim();
@@ -211,6 +227,7 @@ export function parseSummary(lines: PageLine[]): Extraction {
     const heading = HEADINGS.find(([, re]) => re.test(bare));
     if (heading) {
       section = heading[0];
+      lastMed = null;
       // Inline content after the heading: "Final Diagnosis: Acute NSTEMI", "Follow up: … on 28/10".
       const inline = bare.replace(heading[1], '').replace(/^[\s:\-–]+/, '').replace(/^(if|when)\b[\s:]*/i, '').trim();
       const looksLikeHeadingOnly = /:\s*$/.test(bare) || !inline;
@@ -223,13 +240,26 @@ export function parseSummary(lines: PageLine[]): Extraction {
     }
 
     // A medicine line can appear outside the section when it starts with "Tab." etc.
+    const startsNewMed = BULLET.test(t) || FORM.test(bare);
+    if (section === 'meds' && lastMed && !startsNewMed) {
+      // A medicine wrapped onto the next line: "Tab. Domperidone 10 mg" / "1-1-1 before food if vomiting".
+      const joined = parseMedicineLine(`${lastMed.raw} ${t}`, medicines[lastMed.index].source_page, true);
+      if (joined && joined.name === medicines[lastMed.index].name) {
+        medicines[lastMed.index] = joined;
+        lastMed = { raw: `${lastMed.raw} ${t}`, index: lastMed.index };
+        continue;
+      }
+    }
     const med = parseMedicineLine(t, l.page, section === 'meds');
-    if (med && (section === 'meds' || FORM.test(bare))) { medicines.push(med); continue; }
+    if (med && (section === 'meds' || FORM.test(bare))) { medicines.push(med); lastMed = { raw: t, index: medicines.length - 1 }; continue; }
 
     switch (section) {
-      case 'diagnosis': if (diagnosis.length < 4) { diagnosis.push(bare); diagnosisPage ??= l.page; } break;
-      case 'warnings': warnings.push({ text: cap(bare), source_page: l.page }); break;
-      case 'advice': case 'lifestyle': advice.push({ text: cap(bare), source_page: l.page }); break;
+      case 'diagnosis': if (diagnosis.length < 4) {
+        if (diagnosis.length && continues(t, diagnosis[diagnosis.length - 1])) diagnosis[diagnosis.length - 1] += ` ${bare}`;
+        else { diagnosis.push(bare); diagnosisPage ??= l.page; }
+      } break;
+      case 'warnings': pushOrJoin(warnings, t, l.page); break;
+      case 'advice': case 'lifestyle': pushOrJoin(advice, t, l.page); break;
       case 'followup': followLines.push({ text: bare, page: l.page }); break;
       default:
         if (/^follow[\s-]?up\b/i.test(bare)) followLines.push({ text: bare, page: l.page });
@@ -256,7 +286,7 @@ export function parseSummary(lines: PageLine[]): Extraction {
     const place = /\b(OPD[\w\s-]*?|clinic|room\s*\w+)(?=\s+(with|on|at)\b|,|$)/i.exec(f.text);
     follow_ups.push({
       department: dept ? cap(dept[1].toLowerCase()) : null,
-      doctor: doc ? `Dr. ${doc[1].trim()}` : null,
+      doctor: doc ? `Dr. ${doc[1].replace(NOT_NAME, '').trim()}` : null,
       date, time: findTime(f.text),
       place: place ? place[1].trim() : null,
       confidence, source_page: f.page,

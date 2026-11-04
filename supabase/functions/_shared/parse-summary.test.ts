@@ -143,3 +143,38 @@ Deno.test('PDF end to end: clinic style', async () => {
 Deno.test('PDF end to end: a scanned page has no text to read', async () => {
   assertEquals(await pdfToLines(pdfjs as unknown as PdfJs, await fixture('fictional_scanned.pdf')), []);
 });
+
+Deno.test('doctor names stop at the next column', () => {
+  const e = parseSummary(lines('Shree Multispeciality Hospital\nDischarge Summary\nConsultant: Dr. Amit Shah    Department: General Medicine\nDiagnosis: Migraine'));
+  assertEquals(e.treating_doctor, 'Dr. Amit Shah');
+});
+
+Deno.test('sentences and medicines that wrap onto the next line are joined', () => {
+  const e = parseSummary(lines(`Discharge Summary
+Diagnosis: Acute migraine headache without aura.
+Discharge medications:
+1. Tab. Paracetamol 500 mg as required for headache
+2. Tab. Domperidone 10 mg
+   three times a day before food if vomiting x 3 days
+3. Tab. Pantoprazole 40 mg once daily before breakfast x 5 days
+Advice:
+Maintain adequate hydration; take regular meals; avoid
+excessive screen exposure and known headache triggers.
+Avoid self-medication.
+Return to hospital if:
+- Sudden severe headache, weakness of limbs or
+  slurred speech
+- Repeated vomiting`));
+  assertEquals(e.medicines.map((m) => `${m.name}: ${m.timing}`), [
+    'Paracetamol: Only when needed, for headache',
+    'Domperidone: Three times a day, before food',
+    'Pantoprazole: Once a day, before breakfast',
+  ]);
+  assertEquals(e.medicines[1].duration, '3 days');
+  assertEquals(e.medicines[1].confidence, 'high');
+  assertEquals(e.limits.map((x) => x.text), [
+    'Maintain adequate hydration; take regular meals; avoid excessive screen exposure and known headache triggers',
+    'Avoid self-medication',
+  ]);
+  assertEquals(e.warning_signs.map((x) => x.text), ['Sudden severe headache, weakness of limbs or slurred speech', 'Repeated vomiting']);
+});
