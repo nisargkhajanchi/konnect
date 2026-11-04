@@ -47,7 +47,8 @@
           "cameraPermission": "Home Konnect uses the camera so you can photograph your discharge summary.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

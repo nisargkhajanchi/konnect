@@ -9,6 +9,7 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { PdfHost } from '@/components/pdf-host';
 import { SosButton, Toast } from '@/components/ui';
 import { useStore } from '@/state/store';
 import { C, F } from '@/theme';
@@ -80,6 +81,7 @@ export default function RootLayout() {
           <Stack.Screen name="pro/rates" options={{ title: 'Equipment desk', headerBackVisible: false }} />
         </Stack>
         <Toast />
+        <PdfHost />
       </View>
     </SafeAreaProvider>
   );

@@ -19,7 +19,7 @@ type Section = 'meds' | 'advice' | 'lifestyle' | 'warnings' | 'diagnosis' | 'fol
 const HEADINGS: [Section, RegExp][] = [
   // "Diet: …", "Activity: …" always start their own short section.
   ['lifestyle', /^(diet|activity|exercise|lifestyle|physical activity|sleep)\s*([:\-–]|$)/i],
-  ['warnings', /^(return to (the )?hospital|come back (to (the )?hospital )?|seek (urgent|immediate|emergency|medical)|red flags?|warning signs?|danger signs?|when to (seek|return|call)|call (108|the ambulance|your doctor)|go to (the )?(hospital|emergency|er))\b/i],
+  ['warnings', /^((return|report|come back|rush|go)( back)? (immediately )?to (the )?(nearest )?(hospital|emergency|er|casualty|a&e)|come back (immediately )?(to (the )?hospital )?if|seek (urgent|immediate|emergency|medical)|red[\s-]?flags?|warning signs?|danger signs?|emergency signs?|when to (seek|return|call|come back)|call (108|102|the ambulance|an ambulance|your doctor)|contact (your |the )?(doctor|hospital) (immediately )?if|visit (the )?(hospital|emergency|er) (immediately )?if)\b/i],
   ['meds', /^((discharge|home)\s+)?(medications?|medicines?|drugs?|prescriptions?|treatment|rx)(\s+(on|at|after)\s+discharge|\s+advised|\s+prescribed|\s+to continue)?\s*[:\-]?\s*$/i],
   ['meds', /^(medications?|medicines?|treatment)\s+(on|at)\s+discharge\b/i],
   ['advice', /^((discharge|general|special)\s+)?(advice|instructions?|advise|precautions)(\s+(on|at)\s+discharge)?\b/i],
@@ -123,11 +123,11 @@ export function parseMedicineLine(raw: string, page: number | null, inMedSection
   const food = FOOD.find(([re]) => re.test(rest));
   if (food) timing = timing ? `${timing}, ${food[1]}` : food[1].charAt(0).toUpperCase() + food[1].slice(1);
   // "SOS for chest pain" / "when needed for headache" → keep the reason.
-  const reason = /\b(?:sos|prn|needed|required)\s+(?:for|if)\s+([a-z][a-z ]{2,40}?)(?=,|\.|\s{2,}|$|\s+max)/i.exec(rest);
+  const reason = /\b(?:sos|prn|needed|required)\s+(?:for|if)\s+([a-z][a-z ]{2,40}?)(?=,|\.|\s*\(|\s{2,}|$|\s+max|\s+not more)/i.exec(rest);
   if (reason && timing.startsWith('Only when needed')) timing = `Only when needed, for ${reason[1].trim()}`;
 
   const dur = DURATION.exec(rest);
-  const maxDose = /\b(max(?:imum)?\.?\s*\d+[^,.;]*)/i.exec(rest);
+  const maxDose = /\b(max(?:imum)?\.?\s*\d+[^,.;)]*|not more than\s+\d+[^,.;)]*)/i.exec(rest);
   const doseWord = /\b(one|two|half|1|2|½)\s+(tablets?|tabs?|capsules?|caps?|puffs?|drops?|ml|teaspoons?|tsp)\b/i.exec(rest);
 
   const missing: string[] = [];
@@ -283,7 +283,7 @@ export function parseSummary(lines: PageLine[]): Extraction {
       confidence = 'low';
     }
     if (!dept && !doc && !date) continue;
-    const place = /\b(OPD[\w\s-]*?|clinic|room\s*\w+)(?=\s+(with|on|at)\b|,|$)/i.exec(f.text);
+    const place = /\b(OPD(?:\s*(?:no\.?\s*)?\d+)?|clinic|room\s*(?:no\.?\s*)?\d+\w*)\b/i.exec(f.text);
     follow_ups.push({
       department: dept ? cap(dept[1].toLowerCase()) : null,
       doctor: doc ? `Dr. ${doc[1].replace(NOT_NAME, '').trim()}` : null,

@@ -178,3 +178,18 @@ Return to hospital if:
   ]);
   assertEquals(e.warning_signs.map((x) => x.text), ['Sudden severe headache, weakness of limbs or slurred speech', 'Repeated vomiting']);
 });
+
+Deno.test('PDF end to end: columns, wrapped medicine, "Return to emergency if"', async () => {
+  const e = parseSummary(await pdfToLines(pdfjs as unknown as PdfJs, await fixture('fictional_migraine_columns.pdf')));
+  assertEquals(e.patient, { name: 'Rahul Patel', age: 32, sex: 'Male' });
+  assertEquals(e.treating_doctor, 'Dr. Amit Shah');
+  assertEquals(e.medicines.map((m) => [m.name, m.timing, m.duration, m.instructions]), [
+    ['Paracetamol', 'Only when needed, for headache', null, 'not more than 3 tablets a day'],
+    ['Pantoprazole', 'Once a day, before breakfast', '5 days', null],
+    ['Domperidone', 'Three times a day, before food', '3 days', null],
+  ]);
+  assertEquals(e.warning_signs.map((w) => w.text), ['Sudden worst headache of life, weakness, confusion or slurred speech', 'Fever with neck stiffness']);
+  assertEquals(e.diet_activity, []);
+  assertEquals(e.follow_ups[0].place, 'OPD');
+  assertEquals(e.follow_ups[0].date, '2026-11-09');
+});
