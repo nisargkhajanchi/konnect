@@ -10,6 +10,7 @@ export default function CarePlan() {
   const live = useStore((s) => s.live);
   const plan = useStore((s) => s.plan);
   const hasSummary = useStore((s) => s.hasSummary);
+  const isSample = useStore((s) => s.isSample);
   const fu = patient.followUp;
   const section = (title: string, items: string[], tone?: 'red') => items.length ? (
     <>
@@ -27,7 +28,7 @@ export default function CarePlan() {
           ? `From your discharge summary${patient.doctor ? ` by ${patient.doctor}` : ''}${patient.hospital ? `, ${patient.hospital}` : ''}, checked by you. Home Konnect does not change it.`
           : live ? 'Add your discharge summary and your plan appears here.' : 'Sample plan. Add your discharge summary and this fills in from your own document.'}
       </Sub>
-      {!live ? (
+      {!live && isSample ? (
         <>
           <T v="sect" style={{ marginTop: 0 }}>First two weeks (sample)</T>
           <Card>

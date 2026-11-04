@@ -42,7 +42,7 @@ export default function LiveMonitor() {
                 <Btn v="red" small title="Open SOS" onPress={() => router.push('/sos')} style={{ flex: 1 }} />
                 <Btn v="ghost" small title="Call 108" onPress={() => Linking.openURL('tel:108').catch(() => {})} style={{ flex: 1 }} />
               </Row>
-              <T v="small" style={{ marginTop: 8 }}>If he is struggling to breathe, unresponsive or in chest pain, call 108 now.</T>
+              <T v="small" style={{ marginTop: 8 }}>If {patient.first} is struggling to breathe, unresponsive or in chest pain, call 108 now.</T>
             </>
           )}
         </Card>

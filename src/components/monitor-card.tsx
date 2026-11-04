@@ -13,13 +13,14 @@ export const openMonitor = () => {
 export function MonitorCard() {
   const mon = useStore((s) => s.mon);
   const st = useMonState();
+  const first = useStore((s) => s.patient.first);
   if (!mon.paired) {
     return (
       <Card tone="teal" onPress={openMonitor}>
         <T v="label" style={{ color: '#0B6E66' }}>New</T>
         <Between>
           <View style={{ flex: 1 }}>
-            <T v="bodyB">Know how he is overnight</T>
+            <T v="bodyB">Know how {first} is overnight</T>
             <T v="small">24-hour monitor with alerts to family, nurse and clinical desk</T>
           </View>
           <Pill label="See how" />

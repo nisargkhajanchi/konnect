@@ -21,7 +21,7 @@ export default function DeskPatient() {
   return (
     <Screen>
       <T v="h2">{patient.name}</T>
-      <Sub>{patient.age} · {patient.short}, {patient.discharged} · Home, Shantigram</Sub>
+      <Sub>{patient.age} · {patient.short}, {patient.discharged}{patient.address ? ` · ${patient.address}` : ''}</Sub>
       <MonStatus st={st} extra={mon.alert ? (mon.step === 3 ? 'resolved' : ALERT_STEPS[mon.step].toLowerCase()) : undefined} />
       <VGrid>
         <VTile label="Heart rate" value={mon.v.hr} unit="bpm" alert={f.hr} />

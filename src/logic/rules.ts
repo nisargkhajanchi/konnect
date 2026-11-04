@@ -2,7 +2,7 @@
  * Pure rules shared by screens. Clinical thresholds here are DEMO values and must be
  * approved by a clinical lead before real use.
  */
-import type { Equip, Med } from '@/data/demo';
+import type { CarePlan, Equip, Med, Patient } from '@/data/demo';
 import { PATIENT } from '@/data/demo';
 import { inr } from '@/theme';
 
@@ -33,20 +33,40 @@ export function triage(weights: number[]): TriageLevel {
   return 'green';
 }
 
-/* ---------- today's plan, derived from the confirmed medicines ---------- */
+/* ---------- today's plan, built from the patient's own summary ---------- */
 export type DayTask = { id: string; title: string; sub: string };
-const shortName = (m: Med) => m.name.split(' ')[0].toLowerCase();
-export function buildTodayTasks(meds: Med[]): DayTask[] {
-  const morning = meds.filter((m) => /morning/i.test(m.time)).map(shortName);
-  const evening = meds.filter((m) => /evening|night/i.test(m.time)).map(shortName);
-  const tasks: DayTask[] = [{ id: 'bp', title: 'BP and pulse before breakfast', sub: 'Log it in Health' }];
-  if (morning.length) tasks.push({ id: 'medAm', title: 'Morning medicines', sub: cap(morning.join(', ')) });
-  tasks.push({ id: 'walk', title: 'Gentle walk, 10 minutes', sub: 'Indoors, no stairs' });
-  tasks.push({ id: 'lunch', title: 'Low-salt lunch', sub: 'Under 5 g salt for the day' });
-  if (evening.length) tasks.push({ id: 'medPm', title: 'Evening medicines', sub: cap(evening.join(', ')) });
+
+/** Which times of day a medicine is taken. "Only when needed" medicines are not daily tasks. */
+export function medSlots(time: string): ('morning' | 'afternoon' | 'night')[] {
+  const t = time.toLowerCase();
+  if (/only when needed|when needed|as needed|sos/.test(t)) return [];
+  const slots = new Set<'morning' | 'afternoon' | 'night'>();
+  if (/morning|breakfast/.test(t)) slots.add('morning');
+  if (/afternoon|lunch/.test(t)) slots.add('afternoon');
+  if (/night|evening|bed ?time|dinner/.test(t)) slots.add('night');
+  if (/twice a day/.test(t)) { slots.add('morning'); slots.add('night'); }
+  if (/three times|four times|every \d+ hours/.test(t)) { slots.add('morning'); slots.add('afternoon'); slots.add('night'); }
+  if (!slots.size) slots.add('morning'); // once a day, as directed: remind in the morning
+  return [...slots];
+}
+
+const WATCH_BP = /\b(bp|blood pressure|hypertension|heart|cardiac|nstemi|stemi|myocardial|angina|stroke|kidney|ckd|renal)\b/i;
+
+export function buildTodayTasks(meds: Med[], plan: CarePlan, patient: Patient): DayTask[] {
+  const tasks: DayTask[] = [];
+  const advice = [...plan.limits, ...plan.dietActivity].filter((a) => !/\b(bp|blood pressure)\b/i.test(a));
+  if (WATCH_BP.test(`${patient.condition} ${plan.limits.join(' ')}`)) {
+    tasks.push({ id: 'bp', title: 'BP and pulse before breakfast', sub: `Log it in Health. Keep it below ${patient.bpLimit.sys}/${patient.bpLimit.dia}` });
+  }
+  const at = (slot: 'morning' | 'afternoon' | 'night') => meds.filter((m) => medSlots(m.time).includes(slot)).map((m) => m.name);
+  const add = (id: string, title: string, names: string[]) => { if (names.length) tasks.push({ id, title, sub: names.join(', ') }); };
+  add('medAm', 'Morning medicines', at('morning'));
+  advice.slice(0, 2).forEach((a, i) => tasks.push({ id: `adv${i}`, title: a.length > 70 ? a.slice(0, 67).replace(/[ ,;]+\S*$/, '') + '…' : a, sub: 'From your discharge summary' }));
+  add('medNoon', 'Afternoon medicines', at('afternoon'));
+  add('medPm', 'Night medicines', at('night'));
+  if (!tasks.length) tasks.push({ id: 'rest', title: 'Rest and follow your discharge advice', sub: 'Add your discharge summary to fill in your plan' });
   return tasks;
 }
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /* ---------- equipment pricing ---------- */
 export type Mode = 'rent' | 'buy';

@@ -141,7 +141,7 @@ export default function Upload() {
     <Screen>
       <T v="label">Set up · 1 minute</T>
       <T v="h2">Add your discharge summary</T>
-      <Sub>From any hospital. We read it on your phone and build your recovery plan, medicines and reminders. You check everything before it is saved.</Sub>
+      <Sub>From any hospital. We read it on your phone and build your recovery plan and medicine list. You check everything before it is saved.</Sub>
       <Pressable style={s.tile} onPress={pdf} accessibilityRole="button" accessibilityLabel="Upload the PDF">
         <Ic label="PDF" tone="blue" size={46} />
         <View style={{ flex: 1 }}>

@@ -17,6 +17,7 @@ export default function MonitorIntro() {
   const setPlan = useStore((s) => s.setPlan);
   const monRent = useStore((s) => s.equipment.find((e) => e.id === 'mon')?.rentMonth ?? 4500);
   const deskAdd = useStore((s) => s.deskAdd);
+  const first = useStore((s) => s.patient.first);
 
   const plans = [
     { k: 'A' as const, t: 'Monitor and app', s: 'You watch, alerts go to your family', p: monRent },
@@ -25,8 +26,8 @@ export default function MonitorIntro() {
 
   return (
     <Screen dock={<Btn title="Set up monitoring" onPress={() => router.push('/monitor/setup')} />}>
-      <T v="h2">Know how he is, every hour of the day</T>
-      <Sub>A sensor under the mattress reads heart rate, breathing, oxygen and temperature without touching him. Changes reach the nurse and clinical desk within minutes, including at 3 AM.</Sub>
+      <T v="h2">Know how {first} is, every hour of the day</T>
+      <Sub>A sensor under the mattress reads heart rate, breathing, oxygen and temperature without touching the patient. Changes reach the nurse and clinical desk within minutes, including at 3 AM.</Sub>
       <T v="sect" style={{ marginTop: 0 }}>What changes compared with visits alone</T>
       <View style={s.cmp}>
         <View style={s.row}>

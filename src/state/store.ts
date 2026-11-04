@@ -122,6 +122,8 @@ type State = {
   plan: CarePlan;
   meds: Med[];
   hasSummary: boolean;
+  /** Demo only: true while the app shows the built-in sample patient. */
+  isSample: boolean;
   pastServices: PastService[];
   loadFamily: () => Promise<boolean>;
 
@@ -275,6 +277,7 @@ export const useStore = create<State>()((set, get) => {
     plan: isLive ? EMPTY_PLAN : demoApplied.plan,
     meds: isLive ? [] : demoApplied.meds,
     hasSummary: false,
+    isSample: !isLive,
     pastServices: isLive ? [] : PAST_SERVICES,
 
     loadFamily: async () => {
@@ -373,8 +376,16 @@ export const useStore = create<State>()((set, get) => {
           return false;
         }
       }
-      const applied = applyExtraction(r.extraction, get().patient);
-      set({ ...applied, hasSummary: true, tasksDone: {}, review: null });
+      const sample = r.extraction === SAMPLE_EXTRACTION;
+      const applied = applyExtraction(r.extraction, sample ? PATIENT : EMPTY_PATIENT);
+      set((s) => ({
+        ...applied, hasSummary: true, tasksDone: {}, review: null, isSample: sample,
+        // A real summary replaces the sample patient's history.
+        ...(sample ? {} : {
+          bp: [], pastServices: [], bookings: [],
+          visit: { ...s.visit, patientName: applied.patient.name, address: applied.patient.address },
+        }),
+      }));
       return true;
     },
     skipSummary: () => set({ hasSummary: false }),
@@ -510,7 +521,7 @@ export const useStore = create<State>()((set, get) => {
       t(2)(() => { patchVisit({ stage: 2 }); get().showToast('Nurse has arrived. Share the code at the door.'); });
       t(3)(() => patchVisit({ stage: 3, vitals: { sys: 128, dia: 82, pul: 72, spo: 97 }, tasks: get().visit.tasks.map((x, i) => (i === 0 ? { ...x, d: true } : x)) }));
       t(4)(() => patchVisit({ tasks: get().visit.tasks.map((x, i) => (i < 3 ? { ...x, d: true } : x)) }));
-      t(5)(() => get().completeVisit('Readings steady. Walks with light support. Medicines taken on time. Advised to keep salt low and log BP each morning.'));
+      t(5)(() => get().completeVisit('Readings steady. Medicines taken on time. Discharge advice reviewed with the family.'));
     },
 
     equipment: EQUIPMENT.map((e) => ({ ...e })),

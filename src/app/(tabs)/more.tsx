@@ -14,7 +14,7 @@ export default function More() {
   const toast = useStore((s) => s.showToast);
   const signOut = useStore((s) => s.signOut);
   const groups: [string, Item[]][] = [
-    ['His care', [
+    [`${patient.first}'s care`, [
       { ic: 'CP', tone: 'teal', t: 'Care plan', s: 'From your discharge summary', go: to('/care-plan') },
       { ic: 'RX', tone: 'amber', t: 'Medicines and reorder', s: 'Reminders, running low, partner pharmacy', go: to({ pathname: '/(tabs)/health', params: { tab: 'med' } }) },
       { ic: 'PDF', tone: 'blue', t: 'Records', s: 'Reports, prescriptions, who can see them', go: to({ pathname: '/(tabs)/health', params: { tab: 'rec' } }) },

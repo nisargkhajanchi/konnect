@@ -43,7 +43,7 @@ export default function Review() {
   const build = async () => {
     if (await buildPlan()) {
       router.dismissTo('/(tabs)/today');
-      toast('Your plan is ready: medicines, reminders, follow-up and warning signs.');
+      toast('Your plan is ready: medicines, follow-up and warning signs.');
     }
   };
 

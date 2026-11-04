@@ -18,6 +18,7 @@ export default function Sos() {
   const [result, setResult] = useState<TriageLevel | null>(null);
   const [erSent, setErSent] = useState(false);
   const toast = useStore((s) => s.showToast);
+  const first = useStore((s) => s.patient.first);
 
   const toggle = (s: string) => { setResult(null); setSel((x) => (x.includes(s) ? x.filter((y) => y !== s) : [...x, s])); };
   const run = () => setResult(triage(SYMPTOMS.filter((s) => sel.includes(s.s)).map((s) => s.w)));
@@ -36,9 +37,9 @@ export default function Sos() {
         <Card tone="red" style={{ marginTop: 12 }}>
           <T v="label" style={{ color: C.red }}>Emergency</T>
           <T v="h3" style={{ marginBottom: 6 }}>Call 108 now. Do not wait.</T>
-          <T v="small" style={{ color: C.ink }}>Keep him sitting upright and calm. Give aspirin only if the doctor's plan says so. We can send his summary to the ER you are heading to, so they are ready.</T>
+          <T v="small" style={{ color: C.ink }}>Keep {first} sitting upright and calm. Don't give any new medicine unless the doctor's plan says so. We can send the discharge summary to the ER you are heading to, so they are ready.</T>
           <Btn v="red" title="Call 108" onPress={call108} style={{ marginTop: 10 }} />
-          <Btn v="ghost" title={erSent ? 'Summary sent ✓' : 'Send summary to the ER'} disabled={erSent} onPress={() => { setErSent(true); toast('The ER can now see his discharge summary and medicines through a secure link (demo).'); }} style={{ marginTop: 8 }} />
+          <Btn v="ghost" title={erSent ? 'Summary sent ✓' : 'Send summary to the ER'} disabled={erSent} onPress={() => { setErSent(true); toast(`The ER can now see ${first}'s discharge summary and medicines through a secure link (demo).`); }} style={{ marginTop: 8 }} />
         </Card>
       ) : result === 'amber' ? (
         <Card tone="amber" style={{ marginTop: 12 }}>

@@ -19,12 +19,15 @@ export default function Today() {
   const bp = useStore((s) => s.bp);
   const toast = useStore((s) => s.showToast);
 
-  const tasks = buildTodayTasks(meds);
+  const plan = useStore((s) => s.plan);
+  const isSample = useStore((s) => s.isSample);
+  const tasks = buildTodayTasks(meds, plan, patient);
   const next = tasks.find((t) => !done[t.id]);
   const live = useStore((s) => s.live);
   const last = bp.length ? bp[bp.length - 1] : null;
   const st = last ? bpStatus(last[0], patient.bpLimit.sys) : 'ok';
-  const day = dayAtHome(patient.dischargedOn, live ? new Date() : DEMO_TODAY);
+  // The sample patient lives on the prototype's calendar; real summaries use today's date.
+  const day = dayAtHome(patient.dischargedOn, isSample ? DEMO_TODAY : new Date());
   const hasVisit = !!visit.id;
   const visitDone = hasVisit && visit.stage === 4;
   const fu = patient.followUp;
@@ -53,7 +56,7 @@ export default function Today() {
         <Card tone="violet" onPress={() => router.push('/onboarding/upload')}>
           <T v="label" style={{ color: '#6B4FA0' }}>Finish setting up</T>
           <T v="bodyB">Add the discharge summary</T>
-          <T v="small">{live ? 'Your medicines, reminders and warning signs fill in once you add it.' : 'Your plan below uses sample medicines until you add it.'}</T>
+          <T v="small">{live ? 'Your medicines, follow-up and warning signs fill in once you add it.' : 'Your plan below uses sample medicines until you add it.'}</T>
         </Card>
       ) : null}
 

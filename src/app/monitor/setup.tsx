@@ -65,7 +65,7 @@ export default function MonitorSetup() {
       ) : step === 2 ? (
         <View>
           <T v="h2">Place the sensor</T>
-          <Sub>Slide it flat under the mattress, level with his chest.</Sub>
+          <Sub>Slide it flat under the mattress, level with the patient's chest.</Sub>
           <Card>
             <TaskRow left={<StepDot n={1} />} title="Lift the mattress at the chest end" />
             <TaskRow left={<StepDot n={2} />} title="Lay the sensor flat, cable towards the wall" />
@@ -88,7 +88,7 @@ export default function MonitorSetup() {
       ) : step === 4 ? (
         <View>
           <T v="h2">Test reading</T>
-          <Sub>Keep him still for 20 seconds.</Sub>
+          <Sub>Keep the patient still for 20 seconds.</Sub>
           {test === 'ok' ? (
             <VGrid>
               <VTile label="Heart rate" value={71} unit="bpm" />
