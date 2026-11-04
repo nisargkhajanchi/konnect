@@ -12,7 +12,8 @@
       "@shared/*": [
         "./supabase/functions/_shared/*"
       ]
-    }
+    },
+    "allowImportingTsExtensions": true
   },
   "include": [
     "**/*.ts",

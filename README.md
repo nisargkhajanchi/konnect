@@ -7,8 +7,13 @@ The app runs in two modes:
 
 - **Demo mode** (default, no setup): all data is sample data in memory, as in the HTML prototype.
 - **Live mode**: add Supabase keys to `.env` (see [`supabase/README.md`](supabase/README.md)) and you get real
-  phone-OTP login, saved data, discharge summaries read by Claude, and nurse visits that sync live between the
-  family's phone and the nurse's phone.
+  phone-OTP login, saved data, discharge summaries read automatically, and nurse visits that sync live between
+  the family's phone and the nurse's phone.
+
+**Reading discharge summaries needs no AI and no API key.** A built-in parser reads the text of digital PDFs
+(what most hospital systems produce): patient, diagnosis, each medicine with strength and timing ("1-0-1",
+"BD", "SOS for chest pain"), follow-up, limits, warning signs and allergies. Anything it isn't sure of is
+flagged for the family to confirm. Scans and photos have no text, so the family types the details in.
 
 ## Run it on your iPhone (no Mac needed)
 
@@ -23,23 +28,18 @@ The app runs in two modes:
 Building a real App Store app later uses EAS in the cloud (`npx eas-cli@latest build -p ios`), which needs
 an Apple Developer account. No Xcode required.
 
-## Try the discharge-summary reader on your own files
+## Try the discharge-summary reader on your own PDFs
 
-Demo mode always shows the same sample summary. To see what Claude actually reads from a real document,
-without setting up the backend, use the command below. It sends exactly the same request as the app's
-server function and prints what the review screen would show, plus the cost.
+In demo mode the app shows a sample summary. To see what the parser reads from a real PDF, with nothing to
+set up, run this in the project folder (tip: drag the file into Terminal to paste its path):
 
-1. Get an API key at https://console.anthropic.com and set it in Terminal:
-   ```bash
-   export ANTHROPIC_API_KEY=sk-ant-...
-   ```
-2. Run it on a PDF, JPG or PNG (tip: drag the file into Terminal to paste its path):
-   ```bash
-   npm run read-summary -- ~/Downloads/discharge-summary.pdf
-   ```
-   Add `--json` at the end to see the raw result.
+```bash
+npm run read-summary -- ~/Downloads/discharge-summary.pdf
+```
 
-The file is sent to Anthropic's API. Use fictional or consented documents only.
+It runs the same code as the server, on your computer only: nothing is uploaded anywhere. Add `--text` to see
+the text it found in the PDF, or `--json` for the raw result. If something is missed, send the `--text`
+output so the parser can be taught that hospital's layout.
 
 ## What's in the app
 
@@ -84,13 +84,14 @@ supabase/         Database migration, security tests, and the read-summary funct
 | Live (with Supabase) | Still demo in both modes |
 |---|---|
 | Phone OTP login (family and provider) | Provider list, prices and ratings |
-| Discharge summary upload and reading by Claude, family review | Equipment orders and supplier rate card |
+| Discharge summary upload, automatic reading of PDFs, typing in, family review | Equipment orders and supplier rate card |
 | Patient, medicines, care plan, BP readings saved | 24-hour monitor and monitoring desk |
 | Booking a visit, record sharing on/off | Bills, claim pack, care circle |
 | Nurse visit workflow with door code, synced live | Chat, calls, video doctor, pharmacy reorder |
 
-Also still to do: multi-page photo upload (use a PDF for now), app icon and splash, and clinical sign-off on
-the BP limits, SOS weights and monitor scoring.
+Also still to do: app icon and splash, and clinical sign-off on the BP limits, SOS weights and monitor scoring.
+Optional: reading photos and scans automatically would need either on-phone text recognition (needs a full app
+build, not Expo Go) or an AI service; the server already supports Claude for this if `ANTHROPIC_API_KEY` is set.
 
 ## Checks
 

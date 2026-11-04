@@ -111,7 +111,7 @@ export async function uploadDocument(pid: string, uri: string, mimeType: string 
   return row.id;
 }
 
-/** Runs the reader. Can take up to a couple of minutes for long PDFs. */
+/** Runs the reader: built-in parser for digital PDFs; scans and photos need typing in. */
 export async function readSummary(documentId: string): Promise<{ extraction: Extraction; needs_review: string[] }> {
   const { data, error } = await db().functions.invoke('read-summary', { body: { document_id: documentId } });
   if (error) {
@@ -124,8 +124,9 @@ export async function readSummary(documentId: string): Promise<{ extraction: Ext
   return data as { extraction: Extraction; needs_review: string[] };
 }
 
-export async function confirmExtraction(documentId: string, payload: object) {
-  must(await db().rpc('confirm_extraction', { p_document_id: documentId, p: payload }));
+/** Saves the plan the family confirmed. documentId is null when they typed it in. */
+export async function confirmPlan(patientId: string, documentId: string | null, payload: object) {
+  must(await db().rpc('confirm_plan', { p_patient_id: patientId, p_document_id: documentId, p: payload }));
 }
 export async function addBp(pid: string, sys: number, dia: number) {
   must(await db().from('bp_readings').insert({ patient_id: pid, sys, dia }));

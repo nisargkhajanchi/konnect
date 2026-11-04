@@ -9,7 +9,9 @@ import { assert, assertEquals } from 'jsr:@std/assert@1';
 const FAKE_PORT = 54401;
 const DOC_ID = '11111111-2222-4333-8444-555555555555';
 const PATIENT_ID = '99999999-2222-4333-8444-555555555555';
-const PDF = new TextEncoder().encode('%PDF-1.4\n% fake discharge summary\n');
+// Not a real PDF (no text layer can be read), so only the optional AI reader can handle it.
+const FAKE_PDF = new TextEncoder().encode('%PDF-1.4\n% fake discharge summary\n');
+let servedFile: Uint8Array<ArrayBuffer> = FAKE_PDF;
 
 type Captured = { claudeBody?: any; claudeHeaders?: Headers; patches: any[] };
 
@@ -49,7 +51,7 @@ function startFakes(cap: Captured, reply: () => unknown) {
       cap.patches.push(await req.json());
       return new Response(null, { status: 204 });
     }
-    if (u.pathname.startsWith('/storage/v1/object/documents/')) return new Response(PDF, { headers: { 'Content-Type': 'application/pdf' } });
+    if (u.pathname.startsWith('/storage/v1/object/documents/')) return new Response(servedFile, { headers: { 'Content-Type': 'application/pdf' } });
     if (u.pathname === '/v1/messages') {
       cap.claudeBody = await req.json();
       cap.claudeHeaders = req.headers;
@@ -59,12 +61,12 @@ function startFakes(cap: Captured, reply: () => unknown) {
   });
 }
 
-async function runFunction(body: unknown, auth = 'Bearer user-jwt') {
+async function runFunction(body: unknown, auth = 'Bearer user-jwt', withAiKey = true) {
   const child = new Deno.Command(Deno.execPath(), {
     args: ['run', '-A', '--config', new URL('./deno.json', import.meta.url).pathname, new URL('./index.ts', import.meta.url).pathname],
     env: {
       SUPABASE_URL: `http://localhost:${FAKE_PORT}`, SUPABASE_ANON_KEY: 'anon', SUPABASE_SERVICE_ROLE_KEY: 'service',
-      ANTHROPIC_API_KEY: 'test-key', ANTHROPIC_BASE_URL: `http://localhost:${FAKE_PORT}`,
+      ...(withAiKey ? { ANTHROPIC_API_KEY: 'test-key' } : {}), ANTHROPIC_BASE_URL: `http://localhost:${FAKE_PORT}`,
     },
     stdout: 'piped', stderr: 'piped',
   }).spawn();
@@ -80,7 +82,45 @@ async function runFunction(body: unknown, auth = 'Bearer user-jwt') {
   return { status: res?.status ?? 0, json, logs: new TextDecoder().decode(out.stdout) + new TextDecoder().decode(out.stderr) };
 }
 
-Deno.test('reads a PDF, sends the right request to Claude, and saves the result', async () => {
+const fixture = (name: string) => Deno.readFile(new URL(`../_shared/fixtures/${name}`, import.meta.url));
+
+Deno.test('digital PDF is read by the built-in parser, with no AI key and no AI call', async () => {
+  const cap: Captured = { patches: [] };
+  servedFile = await fixture('fictional_cardiac.pdf');
+  const fakes = startFakes(cap, () => modelReply(EXTRACTION));
+  try {
+    const r = await runFunction({ document_id: DOC_ID }, 'Bearer user-jwt', false);
+    assertEquals(r.status, 200, r.logs);
+    assertEquals(r.json.reader, 'rules-v1');
+    assertEquals(r.json.extraction.patient.name, 'Rameshbhai Patel');
+    assertEquals(r.json.extraction.medicines.length, 5);
+    assertEquals(cap.claudeBody, undefined, 'no AI call');
+    assertEquals(cap.patches.at(-1).status, 'read');
+    assertEquals(cap.patches.at(-1).model, 'rules-v1');
+    assert(!r.logs.includes('Metoprolol'), 'document content must never be logged');
+  } finally {
+    servedFile = FAKE_PDF;
+    await fakes.shutdown();
+  }
+});
+
+Deno.test('a scan with no AI key asks the family to type it in', async () => {
+  const cap: Captured = { patches: [] };
+  servedFile = await fixture('fictional_scanned.pdf');
+  const fakes = startFakes(cap, () => modelReply(EXTRACTION));
+  try {
+    const r = await runFunction({ document_id: DOC_ID }, 'Bearer user-jwt', false);
+    assertEquals(r.status, 422);
+    assert(String(r.json.error).includes('type the details in'));
+    assertEquals(cap.claudeBody, undefined);
+    assertEquals(cap.patches.at(-1).status, 'failed');
+  } finally {
+    servedFile = FAKE_PDF;
+    await fakes.shutdown();
+  }
+});
+
+Deno.test('optional AI reader: used for what the parser cannot read, when a key is set', async () => {
   const cap: Captured = { patches: [] };
   const fakes = startFakes(cap, () => modelReply(EXTRACTION));
   try {
@@ -114,7 +154,7 @@ Deno.test('a refusal is stored as a readable failure', async () => {
   try {
     const r = await runFunction({ document_id: DOC_ID });
     assertEquals(r.status, 422);
-    assert(String(r.json.error).includes('enter the details by hand'));
+    assert(String(r.json.error).includes('type the details in'));
     assertEquals(cap.patches.at(-1).status, 'failed');
   } finally {
     await fakes.shutdown();

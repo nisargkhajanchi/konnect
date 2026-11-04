@@ -131,6 +131,8 @@ type State = {
   confirmReviewMed: (i: number) => void;
   renameReviewMed: (i: number, name: string) => void;
   removeReviewMed: (i: number) => void;
+  addReviewMed: (m: { name: string; strength: string; timing: string }) => void;
+  setReviewText: (k: 'patient' | 'diagnosis' | 'hospital', v: string) => void;
   buildPlan: () => Promise<boolean>;
   skipSummary: () => void;
   toggleMedTaken: (id: string) => void;
@@ -338,13 +340,31 @@ export const useStore = create<State>()((set, get) => {
     removeReviewMed: (i) => set((s) => s.review ? {
       review: { ...s.review, extraction: { ...s.review.extraction, medicines: s.review.extraction.medicines.filter((_, j) => j !== i) } },
     } : {}),
+    addReviewMed: ({ name, strength, timing }) => set((s) => s.review ? {
+      review: { ...s.review, extraction: { ...s.review.extraction, medicines: [...s.review.extraction.medicines, {
+        name, strength: strength || null, dose: null, frequency: null, timing: timing || 'As directed', duration: null,
+        instructions: null, confidence: 'high', uncertainty_reason: null, source_page: null,
+      }] } },
+    } : {}),
+    setReviewText: (k, v) => set((s) => {
+      if (!s.review) return {};
+      const e = s.review.extraction;
+      const val = v.trim() ? v : null;
+      const next = k === 'patient' ? { ...e, patient: { ...e.patient, name: val } }
+        : k === 'diagnosis' ? { ...e, diagnosis: { ...e.diagnosis, text: val, confidence: 'high' as const } }
+          : { ...e, hospital: { ...e.hospital, name: val } };
+      return { review: { ...s.review, extraction: next } };
+    }),
     buildPlan: async () => {
       const r = get().review;
       if (!r) return false;
-      if (isLive && r.documentId) {
+      if (isLive) {
         try {
           set({ busy: 'Saving your plan…' });
-          await api.confirmExtraction(r.documentId, confirmPayload(r.extraction));
+          let pid = get().patient.id;
+          if (!pid) { await get().loadFamily(); pid = get().patient.id; }
+          if (!pid) throw new Error('Could not find your account. Please sign in again.');
+          await api.confirmPlan(pid, r.documentId, confirmPayload(r.extraction));
           set({ busy: null, review: null, tasksDone: {} });
           return await get().loadFamily();
         } catch (e) {

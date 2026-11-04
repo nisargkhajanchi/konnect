@@ -7,7 +7,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { DocThumb } from '@/components/doc-thumb';
 import { Banner, Btn, Card, Ic, Row, Screen, Sub, T } from '@/components/ui';
 import { needsReview } from '@shared/extraction';
-import { SAMPLE_EXTRACTION } from '@/data/demo';
+import { EMPTY_EXTRACTION, SAMPLE_EXTRACTION } from '@/data/demo';
 import * as api from '@/lib/api';
 import { useStore } from '@/state/store';
 import { C, F } from '@/theme';
@@ -54,6 +54,13 @@ export default function Upload() {
       if (!pid) throw new Error('Could not set up your account. Please sign in again.');
       const docId = await api.uploadDocument(pid, p.uri, p.mimeType, p.name);
       setDone(1);
+      // Photos have no text to read: keep the photo with the records and let the family type the details in.
+      if (p.mimeType?.startsWith('image/')) {
+        setReview({ documentId: docId, fileName: 'Typed in by hand', extraction: EMPTY_EXTRACTION, notes: [] });
+        router.push('/onboarding/review');
+        setFile(null);
+        return;
+      }
       const r = await api.readSummary(docId);
       setDone(3);
       setReview({ documentId: docId, fileName: p.name, extraction: r.extraction, notes: r.needs_review });
@@ -65,6 +72,11 @@ export default function Upload() {
   };
 
   const handle = (p: Picked) => (live ? runLive(p) : runDemo(p.name));
+  const typeIn = () => {
+    setFile(null); setError(null);
+    setReview({ documentId: null, fileName: 'Typed in by hand', extraction: EMPTY_EXTRACTION, notes: [] });
+    router.push('/onboarding/review');
+  };
 
   const camera = async () => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -115,8 +127,9 @@ export default function Upload() {
         {error ? (
           <>
             <Banner tone="red" text={error} />
-            {last ? <Btn title="Try again" onPress={() => runLive(last)} /> : null}
+            <Btn title="Type the details in instead" onPress={typeIn} />
             <Btn v="ghost" title="Choose a different file" onPress={() => { setFile(null); setError(null); }} style={{ marginTop: 10 }} />
+            {last ? <Btn v="ghost" title="Try the same file again" onPress={() => runLive(last)} style={{ marginTop: 10 }} /> : null}
           </>
         ) : null}
       </Screen>
@@ -127,26 +140,26 @@ export default function Upload() {
     <Screen>
       <T v="label">Set up · 1 minute</T>
       <T v="h2">Add your discharge summary</T>
-      <Sub>From any hospital. We read it and build your recovery plan, medicines and reminders. You check everything before it is saved.</Sub>
+      <Sub>From any hospital. We read it and build your recovery plan, medicines and reminders. You check everything before it is saved. The hospital's PDF reads best.</Sub>
       <Pressable style={s.tile} onPress={camera} accessibilityRole="button" accessibilityLabel="Take a photo of the discharge summary">
         <Ic label="CAM" tone="amber" size={46} />
         <View style={{ flex: 1 }}>
           <T v="bodyB">Take a photo</T>
-          <T v="small">Lay the page flat in good light.</T>
+          <T v="small">{live ? 'Saved with your records. You type the details in.' : 'Lay the page flat in good light.'}</T>
         </View>
       </Pressable>
       <Pressable style={s.tile} onPress={photo} accessibilityRole="button" accessibilityLabel="Choose a photo from your library">
         <Ic label="IMG" tone="teal" size={46} />
         <View style={{ flex: 1 }}>
           <T v="bodyB">Choose a photo</T>
-          <T v="small">From your gallery or WhatsApp images.</T>
+          <T v="small">{live ? 'Saved with your records. You type the details in.' : 'From your gallery or WhatsApp images.'}</T>
         </View>
       </Pressable>
       <Pressable style={s.tile} onPress={pdf} accessibilityRole="button" accessibilityLabel="Upload a PDF">
         <Ic label="PDF" tone="blue" size={46} />
         <View style={{ flex: 1 }}>
-          <T v="bodyB">Upload a PDF</T>
-          <T v="small">From your phone, email or WhatsApp downloads. Best for several pages.</T>
+          <T v="bodyB">Upload the PDF</T>
+          <T v="small">From email or WhatsApp downloads. Read automatically, in seconds.</T>
         </View>
       </Pressable>
       <Card tone="teal" style={{ marginTop: 4 }}>
@@ -156,6 +169,7 @@ export default function Upload() {
         </T>
       </Card>
       {!live ? <Btn v="ghost" title="Try with a sample summary" onPress={() => runDemo('Sample discharge summary.pdf')} style={{ marginTop: 10 }} /> : null}
+      <Btn v="ghost" title="Type the details in" onPress={typeIn} style={{ marginTop: 10 }} />
       <Btn
         v="ghost"
         title="I don't have it with me. Start without one"

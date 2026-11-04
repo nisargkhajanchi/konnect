@@ -48,6 +48,15 @@ export const PATIENT: Patient = {
 
 export type Med = { id: string; name: string; time: string; ok: boolean; why?: string; taken: boolean };
 
+/** Starting point when the family types the details in. */
+export const EMPTY_EXTRACTION: Extraction = {
+  is_discharge_summary: true, legibility: 'clear',
+  patient: { name: null, age: null, sex: null }, hospital: { name: null, discharge_date: null },
+  diagnosis: { text: null, confidence: 'high', source_page: null }, treating_doctor: null,
+  medicines: [], follow_ups: [], bp_limit: { sys: null, dia: null },
+  limits: [], warning_signs: [], allergies: [], diet_activity: [],
+};
+
 /** Demo stand-in for what the reader returns. One medicine is low-confidence on purpose. */
 export const SAMPLE_EXTRACTION: Extraction = {
   is_discharge_summary: true,

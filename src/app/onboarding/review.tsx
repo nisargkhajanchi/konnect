@@ -1,9 +1,9 @@
-import { router } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 
 import { DocThumb } from '@/components/doc-thumb';
-import { Banner, Between, Btn, Card, Grow, LinkText, Pill, Row, Screen, Sub, T, TaskRow, Toggle } from '@/components/ui';
+import { Banner, Between, Btn, Card, Field, Grow, LinkText, Pill, Row, Screen, Sub, T, TaskRow, Toggle } from '@/components/ui';
 import { followUpFrom, medLabel, shortDate } from '@/logic/plan';
 import { useStore } from '@/state/store';
 import { C, F } from '@/theme';
@@ -14,12 +14,16 @@ export default function Review() {
   const confirmMed = useStore((s) => s.confirmReviewMed);
   const renameMed = useStore((s) => s.renameReviewMed);
   const removeMed = useStore((s) => s.removeReviewMed);
+  const addMed = useStore((s) => s.addReviewMed);
+  const setText = useStore((s) => s.setReviewText);
   const buildPlan = useStore((s) => s.buildPlan);
   const busy = useStore((s) => s.busy);
   const toast = useStore((s) => s.showToast);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState('');
   const [remind, setRemind] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [newMed, setNewMed] = useState({ name: '', strength: '', timing: '' });
 
   if (!review) {
     return (
@@ -31,8 +35,9 @@ export default function Review() {
   }
   const e = review.extraction;
   const pending = e.medicines.filter((m) => m.confidence === 'low').length;
+  const manual = review.fileName === 'Typed in by hand';
   const notSummary = !e.is_discharge_summary;
-  const blocked = pending > 0 || editing !== null || !!busy || notSummary;
+  const blocked = pending > 0 || editing !== null || adding || !!busy || notSummary || (manual && !e.medicines.length);
   const fu = e.follow_ups.map(followUpFrom).filter((x) => x !== null);
 
   const build = async () => {
@@ -62,9 +67,10 @@ export default function Review() {
           />
         </View>
       }>
-      <T v="h2">Is this right?</T>
-      <Sub>Please confirm. Your plan is built only from what is in your document.</Sub>
-      <Card>
+      <Stack.Screen options={{ title: manual ? 'Type in details' : 'Check what we read' }} />
+      <T v="h2">{manual ? 'Type in the discharge details' : 'Is this right?'}</T>
+      <Sub>{manual ? 'Copy them from the discharge summary. Add each medicine exactly as written.' : 'Please confirm. Your plan is built only from what is in your document.'}</Sub>
+      {!manual ? <Card>
         <Row>
           <DocThumb />
           <Grow>
@@ -73,18 +79,17 @@ export default function Review() {
           </Grow>
           <Pill label={e.legibility === 'clear' ? 'Read clearly' : e.legibility === 'unreadable' ? 'Hard to read' : 'Partly unclear'} tone={e.legibility === 'clear' ? 'teal' : 'amber'} />
         </Row>
-      </Card>
+      </Card> : null}
       {notSummary ? <Banner tone="red" text="This does not look like a discharge summary. Go back and choose the summary the hospital gave you." onPress={() => router.back()} /> : null}
       {e.legibility === 'unreadable' ? <Banner tone="amber" text="Most of this document was hard to read. Try a clearer photo in good light, or the PDF from the hospital." /> : null}
 
       <T v="sect">Patient and diagnosis</T>
       <Card>
-        <T v="small">Patient</T>
-        <T v="bodyB" style={{ marginBottom: 8 }}>{e.patient.name ?? 'Not found'}{e.patient.age ? `, ${e.patient.age}` : ''}</T>
-        <T v="small">Diagnosis</T>
-        <T v="bodyB">{e.diagnosis.text ?? 'Not found'}</T>
-        {e.diagnosis.text && e.diagnosis.confidence === 'low' ? <Text style={{ fontFamily: F.semibold, fontSize: 12, color: C.amberDeep, marginTop: 3 }}>Partly unclear. Check it against the document.</Text> : null}
-        {e.treating_doctor ? <><T v="small" style={{ marginTop: 8 }}>Doctor</T><T v="bodyB">{e.treating_doctor}</T></> : null}
+        <Field label={`Patient${e.patient.age ? ` (age ${e.patient.age})` : ''}`} value={e.patient.name ?? ''} onChangeText={(v) => setText('patient', v)} placeholder="Full name" />
+        <Field label="Hospital" value={e.hospital.name ?? ''} onChangeText={(v) => setText('hospital', v)} placeholder="Hospital name" />
+        <Field label="Diagnosis" value={e.diagnosis.text ?? ''} onChangeText={(v) => setText('diagnosis', v)} placeholder="As written on the summary" multiline style={{ minHeight: 48 }} />
+        {e.diagnosis.text && e.diagnosis.confidence === 'low' ? <Text style={{ fontFamily: F.semibold, fontSize: 12, color: C.amberDeep, marginTop: -6 }}>Partly unclear. Check it against the document.</Text> : null}
+        {e.treating_doctor ? <T v="small">Doctor: {e.treating_doctor}</T> : null}
       </Card>
 
       <T v="sect">Medicines · {e.medicines.length}</T>
@@ -127,10 +132,23 @@ export default function Review() {
             )}
           </View>
         ))}
-        {!e.medicines.length ? <T v="small" style={{ paddingVertical: 8 }}>No medicines found in this document.</T> : null}
-        <View style={{ paddingTop: 10 }}>
-          <LinkText title="+ Add a medicine we missed" onPress={() => toast('Adding a medicine by hand is coming soon. For now, edit the closest one.')} />
-        </View>
+        {!e.medicines.length && !adding ? <T v="small" style={{ paddingVertical: 8 }}>{manual ? 'No medicines added yet.' : 'No medicines found in this document.'}</T> : null}
+        {adding ? (
+          <View style={{ paddingTop: 12 }}>
+            <Field label="Medicine name" value={newMed.name} onChangeText={(v) => setNewMed({ ...newMed, name: v })} placeholder="For example: Metoprolol" autoFocus />
+            <Field label="Strength" value={newMed.strength} onChangeText={(v) => setNewMed({ ...newMed, strength: v })} placeholder="For example: 25 mg" />
+            <Field label="When to take it" value={newMed.timing} onChangeText={(v) => setNewMed({ ...newMed, timing: v })} placeholder="For example: Morning and night, after food" />
+            <Row gap={8}>
+              <Btn small v="teal" title="Add medicine" disabled={!newMed.name.trim()} style={{ flex: 1 }}
+                onPress={() => { addMed({ name: newMed.name.trim(), strength: newMed.strength.trim(), timing: newMed.timing.trim() }); setNewMed({ name: '', strength: '', timing: '' }); setAdding(false); }} />
+              <Btn small v="ghost" title="Cancel" style={{ flex: 1 }} onPress={() => setAdding(false)} />
+            </Row>
+          </View>
+        ) : (
+          <View style={{ paddingTop: 10 }}>
+            <LinkText title={manual ? '+ Add a medicine' : '+ Add a medicine we missed'} onPress={() => setAdding(true)} />
+          </View>
+        )}
       </Card>
 
       <T v="sect">Follow-up</T>

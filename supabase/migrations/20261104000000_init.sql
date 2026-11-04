@@ -266,12 +266,15 @@ begin
 end $$;
 
 -- Saves what the family confirmed on the review screen. Replaces the active medicine list.
-create or replace function public.confirm_extraction(p_document_id uuid, p jsonb)
+-- p_document_id is null when the family typed the details in instead of uploading a document.
+create or replace function public.confirm_plan(p_patient_id uuid, p_document_id uuid, p jsonb)
 returns void language plpgsql security definer set search_path = public as $$
-declare pid uuid; m jsonb;
+declare pid uuid := p_patient_id; m jsonb;
 begin
-  select patient_id into pid from documents where id = p_document_id;
   if pid is null or not public.can_manage(pid) then raise exception 'not allowed' using errcode = '42501'; end if;
+  if p_document_id is not null and not exists (select 1 from documents where id = p_document_id and patient_id = pid) then
+    raise exception 'document does not belong to this patient' using errcode = '42501';
+  end if;
 
   update patients set
     full_name = coalesce(nullif(p->>'patient_name', ''), full_name),
@@ -300,7 +303,7 @@ begin
     end if;
   end loop;
 
-  update documents set status = 'confirmed' where id = p_document_id;
+  if p_document_id is not null then update documents set status = 'confirmed' where id = p_document_id; end if;
 end $$;
 
 create or replace function public.book_visit(p_patient_id uuid, p_org_slug text, p_service text, p_scheduled_at timestamptz, p_share boolean, p_price_inr int)
@@ -416,7 +419,7 @@ end $$;
 revoke execute on all functions in schema public from public, anon;
 grant execute on function
   public.create_patient(text, text),
-  public.confirm_extraction(uuid, jsonb),
+  public.confirm_plan(uuid, uuid, jsonb),
   public.book_visit(uuid, text, text, timestamptz, boolean, int),
   public.set_visit_sharing(uuid, boolean),
   public.join_provider_org(text, text),

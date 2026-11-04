@@ -1,21 +1,29 @@
 /**
- * read-summary: reads an uploaded discharge summary with Claude and stores the extraction.
+ * read-summary: reads an uploaded discharge summary and stores what was found.
  *
  * POST { document_id }  (Authorization: Bearer <user JWT>, sent automatically by supabase.functions.invoke)
- * -> 200 { document_id, extraction, needs_review }
+ * -> 200 { document_id, extraction, needs_review, reader }
+ *
+ * Digital PDFs are read by the built-in rule-based parser (no AI, no cost). Scans and photos have no
+ * text, so the family types the details in, unless ANTHROPIC_API_KEY is set, in which case Claude
+ * reads them. That key is optional and off by default.
  *
  * The caller must be a primary or backup contact for the document's patient. Nothing is saved to the
- * patient's plan here: the family confirms on the review screen, which calls confirm_extraction().
+ * patient's plan here: the family confirms on the review screen, which calls confirm_plan().
  *
- * Secrets: ANTHROPIC_API_KEY (set with `supabase secrets set`). SUPABASE_URL, SUPABASE_ANON_KEY and
- * SUPABASE_SERVICE_ROLE_KEY are provided by the Supabase runtime.
+ * SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY are provided by the Supabase runtime.
  */
 import Anthropic from 'npm:@anthropic-ai/sdk@1.4.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { encodeBase64 } from 'jsr:@std/encoding@1/base64';
+import * as pdfjs from 'npm:pdfjs-dist@6.5.438/legacy/build/pdf.mjs';
 
-import { buildReadRequest, ExtractionError, needsReview, normalizeExtraction } from '../_shared/extraction.ts';
+import { buildReadRequest, type Extraction, ExtractionError, needsReview, normalizeExtraction } from '../_shared/extraction.ts';
 import { sniffMediaType } from '../_shared/media.ts';
+import { parseSummary } from '../_shared/parse-summary.ts';
+import { type PdfJs, pdfToLines } from '../_shared/pdf-text.ts';
+
+const RULES_READER = 'rules-v1';
 
 const MAX_BYTES = 20 * 1024 * 1024; // well under the 32 MB request limit after base64
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -43,8 +51,8 @@ Deno.serve(async (req) => {
   const url = Deno.env.get('SUPABASE_URL');
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
-  if (!url || !anonKey || !serviceKey || !anthropicKey) {
+  const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY'); // optional
+  if (!url || !anonKey || !serviceKey) {
     console.error('read-summary: missing environment configuration');
     return json({ error: 'The document reader is not configured yet.' }, 500);
   }
@@ -77,25 +85,41 @@ Deno.serve(async (req) => {
     const media = sniffMediaType(bytes);
     if (!media) throw new UserFacingError('Please upload a PDF, JPG or PNG. Other formats (such as HEIC) are not supported yet.', 415);
 
-    const client = new Anthropic({ apiKey: anthropicKey, timeout: 120_000, maxRetries: 1 });
-    const response = await client.beta.messages.create(buildReadRequest(media, encodeBase64(bytes)));
+    let extraction: Extraction | null = null;
+    let reader = RULES_READER;
 
-    // Log sizes and outcome only. Never log document content.
-    console.log(JSON.stringify({ fn: 'read-summary', model: response.model, stop: response.stop_reason, in: response.usage.input_tokens, out: response.usage.output_tokens }));
+    // 1. Digital PDFs: read the text layer with the built-in parser.
+    if (media === 'application/pdf') {
+      const lines = await pdfToLines(pdfjs as unknown as PdfJs, bytes).catch(() => []);
+      if (lines.length) extraction = parseSummary(lines);
+    }
 
-    if (response.stop_reason === 'refusal') throw new UserFacingError('This document could not be read automatically. Please enter the details by hand.');
-    if (response.stop_reason === 'max_tokens') throw new UserFacingError('This document is too long to read in one go. Try uploading only the discharge pages.');
+    // 2. Scans and photos: only if the optional AI reader is switched on.
+    if (!extraction) {
+      if (!anthropicKey) {
+        throw new UserFacingError(media === 'application/pdf'
+          ? 'This PDF is a scanned image, so it cannot be read automatically. Please type the details in.'
+          : 'Photos cannot be read automatically. Upload the PDF from the hospital, or type the details in.');
+      }
+      const client = new Anthropic({ apiKey: anthropicKey, timeout: 120_000, maxRetries: 1 });
+      const response = await client.beta.messages.create(buildReadRequest(media, encodeBase64(bytes)));
+      // Log sizes and outcome only. Never log document content.
+      console.log(JSON.stringify({ fn: 'read-summary', model: response.model, stop: response.stop_reason, in: response.usage.input_tokens, out: response.usage.output_tokens }));
+      if (response.stop_reason === 'refusal') throw new UserFacingError('This document could not be read automatically. Please type the details in.');
+      if (response.stop_reason === 'max_tokens') throw new UserFacingError('This document is too long to read in one go. Try uploading only the discharge pages.');
+      const text = response.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
+      let raw: unknown;
+      try { raw = JSON.parse(text); } catch { throw new ExtractionError('Model output was not valid JSON'); }
+      extraction = normalizeExtraction(raw);
+      reader = response.model;
+    }
 
-    const text = response.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
-    let raw: unknown;
-    try { raw = JSON.parse(text); } catch { throw new ExtractionError('Model output was not valid JSON'); }
-    const extraction = normalizeExtraction(raw);
-
+    console.log(JSON.stringify({ fn: 'read-summary', reader, medicines: extraction.medicines.length, flagged: needsReview(extraction).length }));
     await admin.from('documents').update({
-      status: 'read', extraction, model: response.model, read_at: new Date().toISOString(), error: null,
+      status: 'read', extraction, model: reader, read_at: new Date().toISOString(), error: null,
     }).eq('id', documentId);
 
-    return json({ document_id: documentId, extraction, needs_review: needsReview(extraction) });
+    return json({ document_id: documentId, extraction, needs_review: needsReview(extraction), reader });
   } catch (err) {
     let message = 'Something went wrong while reading the document. Please try again.';
     let status = 502;

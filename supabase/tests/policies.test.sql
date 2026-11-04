@@ -49,7 +49,7 @@ select pg_temp.must_fail(format($q$insert into public.documents (patient_id, sto
 select pg_temp.must_fail($q$insert into storage.objects (bucket_id, name) values ('documents', 'not-a-uuid/x.pdf')$q$, 'upload to a non-patient folder');
 select pg_temp.must_fail(format($q$update public.profiles set kind = 'provider' where id = %L$q$, '00000000-0000-0000-0000-00000000f001'), 'family makes itself a provider');
 
-select public.confirm_extraction(:'d1', jsonb_build_object(
+select public.confirm_plan(:'p1', :'d1', jsonb_build_object(
   'patient_name', 'Rameshbhai Patel', 'age', 62, 'condition', 'Heart attack (NSTEMI), stent placed',
   'hospital', 'City Care Hospital', 'discharged_on', '2026-10-19', 'bp_limit_sys', 140, 'bp_limit_dia', 90,
   'medicines', jsonb_build_array(
@@ -58,6 +58,15 @@ select public.confirm_extraction(:'d1', jsonb_build_object(
   'warning_signs', jsonb_build_array(jsonb_build_object('text', 'Chest pain', 'source_page', 2))));
 select pg_temp.check((select count(*) = 2 from public.medicines where active), 'confirmed plan saves medicines');
 select pg_temp.check((select status = 'confirmed' from public.documents where id = :'d1'), 'document marked confirmed');
+-- Typed in by hand, with no document
+select public.confirm_plan(:'p1', null, jsonb_build_object('medicines', jsonb_build_array(
+  jsonb_build_object('name', 'Aspirin', 'strength', '75 mg', 'timing', 'Morning'),
+  jsonb_build_object('name', 'Metoprolol', 'strength', '25 mg', 'timing', 'Morning and night'),
+  jsonb_build_object('name', 'Atorvastatin', 'strength', '40 mg', 'timing', 'Night'))));
+select pg_temp.check((select count(*) = 3 from public.medicines where active), 'typed-in plan replaces medicines');
+select public.create_patient('Other') as p_other \gset
+select pg_temp.check((select count(*) = 1 from public.patient_members where patient_id = :'p_other'), 'second patient created');
+select pg_temp.must_fail(format('select public.confirm_plan(%L, %L, %L::jsonb)', :'p_other', :'d1', '{}'), 'use another patient''s document');
 insert into public.bp_readings (patient_id, sys, dia) values (:'p1', 128, 82);
 select pg_temp.check((select source = 'family' from public.bp_readings limit 1), 'family logs BP as family');
 
@@ -66,7 +75,8 @@ select pg_temp.as_user('00000000-0000-0000-0000-00000000f002');
 select pg_temp.check((select count(*) = 0 from public.patients), 'stranger cannot see the patient');
 select pg_temp.check((select count(*) = 0 from public.medicines), 'stranger cannot see medicines');
 select pg_temp.check((select count(*) = 0 from storage.objects), 'stranger cannot see uploaded files');
-select pg_temp.must_fail(format('select public.confirm_extraction(%L, %L::jsonb)', :'d1', '{}'), 'stranger confirms a plan');
+select pg_temp.must_fail(format('select public.confirm_plan(%L, %L, %L::jsonb)', :'p1', :'d1', '{}'), 'stranger confirms a plan');
+select pg_temp.must_fail(format('select public.confirm_plan(%L, null, %L::jsonb)', :'p1', '{}'), 'stranger types in a plan');
 select pg_temp.must_fail(format($q$insert into storage.objects (bucket_id, name) values ('documents', %L)$q$, :'p1' || '/evil.pdf'), 'stranger uploads into the patient folder');
 select pg_temp.must_fail(format($q$select public.book_visit(%L, 'sunrise', 'Home nursing', now(), true, 650)$q$, :'p1'), 'stranger books a visit');
 
@@ -90,8 +100,8 @@ select pg_temp.must_fail(format($q$update public.visits set stage = 4 where id =
 -- Sunrise nurse works the visit
 select pg_temp.as_user('00000000-0000-0000-0000-00000000a001');
 select pg_temp.check((select count(*) = 1 from public.visits), 'nurse sees the booked visit');
-select pg_temp.check((select count(*) = 1 from public.patients), 'nurse sees shared records during the visit');
-select pg_temp.check((select count(*) = 2 from public.medicines), 'nurse sees shared medicines');
+select pg_temp.check((select count(*) = 1 from public.patients), 'nurse sees only the booked patient');
+select pg_temp.check((select count(*) = 3 from public.medicines where active), 'nurse sees shared medicines');
 select pg_temp.check((select count(*) = 0 from public.visit_codes), 'nurse cannot read the door code');
 select pg_temp.must_fail(format('select public.visit_check_in(%L, %L)', :'v1', :'v1code'), 'check in before arriving');
 select public.visit_advance(:'v1', 1::smallint);
