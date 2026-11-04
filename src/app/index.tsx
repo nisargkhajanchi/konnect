@@ -30,7 +30,8 @@ export default function Welcome() {
         await st.loadProvider();
         router.replace(role === 'Equipment supplier' ? '/pro/rates' : '/pro/today');
       } else if (await st.loadFamily()) {
-        router.replace(useStore.getState().hasSummary ? '/(tabs)/today' : '/onboarding/upload');
+        const now = useStore.getState();
+        router.replace(!now.me.name ? '/onboarding/about-you' : now.hasSummary ? '/(tabs)/today' : '/onboarding/upload');
       } else {
         setRestoring(false);
       }

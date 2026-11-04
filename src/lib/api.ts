@@ -42,14 +42,31 @@ export async function signOut() {
   if (supabase) await supabase.auth.signOut();
 }
 
-export type ProfileRow = { id: string; kind: 'family' | 'provider'; provider_role: string | null; provider_org_id: string | null };
+export type ProfileRow = { id: string; full_name: string | null; kind: 'family' | 'provider'; provider_role: string | null; provider_org_id: string | null };
 export async function getProfile(): Promise<ProfileRow | null> {
   const uid = await currentUserId();
   if (!uid) return null;
-  return must(await db().from('profiles').select('id, kind, provider_role, provider_org_id').eq('id', uid).maybeSingle()) as ProfileRow | null;
+  return must(await db().from('profiles').select('id, full_name, kind, provider_role, provider_org_id').eq('id', uid).maybeSingle()) as ProfileRow | null;
 }
 
 /* ---------------- family ---------------- */
+
+/** The signed-in family member's name and relation to the patient. */
+export async function getMyDetails(): Promise<{ name: string | null; relation: string | null }> {
+  const uid = await currentUserId();
+  if (!uid) return { name: null, relation: null };
+  const [profile, member] = await Promise.all([
+    db().from('profiles').select('full_name').eq('id', uid).maybeSingle(),
+    db().from('patient_members').select('relation').eq('user_id', uid).limit(1).maybeSingle(),
+  ]);
+  return {
+    name: (must(profile) as { full_name: string | null } | null)?.full_name ?? null,
+    relation: (must(member) as { relation: string | null } | null)?.relation ?? null,
+  };
+}
+export async function saveMyDetails(name: string, relation: string) {
+  must(await db().rpc('set_my_details', { p_full_name: name, p_relation: relation }));
+}
 
 export type PatientRow = {
   id: string; full_name: string | null; age: number | null; condition: string | null; hospital: string | null;

@@ -116,6 +116,9 @@ type State = {
   setProRole: (r: ProRole) => void;
   providerOrgId: string | null;
   signOut: () => Promise<void>;
+  /** The signed-in family member (not the patient). */
+  me: { name: string | null; relation: string | null };
+  saveMe: (name: string, relation: string) => Promise<boolean>;
 
   /* patient and plan */
   patient: Patient;
@@ -268,9 +271,23 @@ export const useStore = create<State>()((set, get) => {
       unwatch();
       await api.signOut().catch(() => {});
       set({
-        signedIn: false, providerOrgId: null, review: null, bookings: [], orgVisits: [], tasksDone: {},
+        signedIn: false, providerOrgId: null, review: null, me: { name: null, relation: null }, bookings: [], orgVisits: [], tasksDone: {},
         ...(isLive ? { patient: EMPTY_PATIENT, plan: EMPTY_PLAN, meds: [], bp: [], visit: NO_VISIT, hasSummary: false, pastServices: [] } : {}),
       });
+    },
+
+    me: { name: null, relation: null },
+    saveMe: async (name, relation) => {
+      const clean = { name: name.trim(), relation: relation.trim() };
+      if (!clean.name) return false;
+      if (isLive) {
+        try { await api.saveMyDetails(clean.name, clean.relation); } catch (e) {
+          get().showToast(e instanceof Error ? e.message : 'Could not save your details.');
+          return false;
+        }
+      }
+      set({ me: { name: clean.name, relation: clean.relation || null } });
+      return true;
     },
 
     patient: isLive ? EMPTY_PATIENT : demoApplied.patient,
@@ -285,7 +302,8 @@ export const useStore = create<State>()((set, get) => {
       try {
         set({ busy: 'Loading…' });
         const pid = await api.ensurePatient();
-        const [d, orgs] = await Promise.all([api.loadFamily(pid), api.orgNames()]);
+        const [d, orgs, me] = await Promise.all([api.loadFamily(pid), api.orgNames(), api.getMyDetails()]);
+        set({ me });
         const p = d.patient;
         const name = p.full_name ?? EMPTY_PATIENT.name;
         const current = pickVisit(d.visits);
@@ -638,3 +656,10 @@ export const useStore = create<State>()((set, get) => {
 export const useMonState = () =>
   useStore((s) => (s.mon.paired ? monState(monScore(s.mon.v, s.mon.thr, s.mon.online, s.mon.onBed)) : 'ok'));
 export const usePatient = () => useStore((s) => s.patient);
+
+/** "Kiran Patel" -> "KP", "Asha" -> "A". */
+export function initials(name: string | null | undefined): string {
+  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '';
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}

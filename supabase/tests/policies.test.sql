@@ -42,6 +42,10 @@ select pg_temp.check((select count(*) = 4 from public.profiles), 'profile create
 select pg_temp.as_user('00000000-0000-0000-0000-00000000f001');
 select public.create_patient('Rameshbhai Patel', 'B-204, Shantigram') as p1 \gset
 select pg_temp.check((select count(*) = 1 from public.patients), 'family sees own patient');
+select public.set_my_details('Kiran Patel', 'Son');
+select pg_temp.check((select full_name = 'Kiran Patel' from public.profiles where id = auth.uid()), 'family saves own name');
+select pg_temp.check((select relation = 'Son' from public.patient_members where user_id = auth.uid()), 'family saves relation');
+select pg_temp.must_fail($q$select public.set_my_details('   ', 'Son')$q$, 'blank name');
 insert into public.documents (patient_id, storage_path, mime_type) values (:'p1', :'p1' || '/summary.pdf', 'application/pdf') returning id as d1 \gset
 insert into storage.objects (bucket_id, name) values ('documents', :'p1' || '/summary.pdf');
 select pg_temp.check(true, 'family uploads into own patient folder');

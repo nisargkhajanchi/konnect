@@ -17,7 +17,7 @@ import { C, F } from '@/theme';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 /** Screens where the family SOS button is NOT shown in the header. */
-const NO_SOS = new Set(['index', 'login', 'onboarding/upload', 'onboarding/review', 'sos']);
+const NO_SOS = new Set(['index', 'login', 'onboarding/about-you', 'onboarding/upload', 'onboarding/review', 'sos']);
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -55,6 +55,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding/about-you" options={{ title: 'About you' }} />
           <Stack.Screen name="onboarding/upload" options={{ title: 'Discharge summary' }} />
           <Stack.Screen name="onboarding/review" options={{ title: 'Check what we read' }} />
           <Stack.Screen name="providers" options={{ title: 'Providers' }} />

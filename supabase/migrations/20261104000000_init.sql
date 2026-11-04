@@ -49,6 +49,8 @@ create table public.patient_members (
   patient_id uuid not null references public.patients (id) on delete cascade,
   user_id uuid not null references auth.users (id) on delete cascade,
   role text not null check (role in ('primary', 'backup', 'viewer')),
+  -- How this family member is related to the patient, e.g. "Son". Set by the member.
+  relation text check (char_length(relation) <= 40),
   created_at timestamptz not null default now(),
   primary key (patient_id, user_id)
 );
@@ -330,6 +332,16 @@ begin
   update visits set share_records = p_share where id = p_visit_id;
 end $$;
 
+-- The signed-in family member's own name and relation to the patient(s) they belong to.
+create or replace function public.set_my_details(p_full_name text, p_relation text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not signed in' using errcode = '42501'; end if;
+  if char_length(trim(coalesce(p_full_name, ''))) not between 1 and 80 then raise exception 'name must be 1 to 80 characters'; end if;
+  update profiles set full_name = trim(p_full_name) where id = auth.uid();
+  update patient_members set relation = nullif(trim(p_relation), '') where user_id = auth.uid();
+end $$;
+
 /* ------------------------------------------------------------------ provider functions */
 
 create or replace function public.join_provider_org(p_join_code text, p_role text)
@@ -422,6 +434,7 @@ grant execute on function
   public.confirm_plan(uuid, uuid, jsonb),
   public.book_visit(uuid, text, text, timestamptz, boolean, int),
   public.set_visit_sharing(uuid, boolean),
+  public.set_my_details(text, text),
   public.join_provider_org(text, text),
   public.visit_advance(uuid, smallint),
   public.visit_check_in(uuid, text),

@@ -26,7 +26,7 @@ export default function Login() {
     if (!live) {
       if (!sentTo) { setSentTo(phone); return; }
       setSignedIn(true);
-      router.replace('/onboarding/upload');
+      router.replace(useStore.getState().me.name ? '/onboarding/upload' : '/onboarding/about-you');
       return;
     }
     setBusy(true);
@@ -39,8 +39,9 @@ export default function Login() {
         await api.verifyOtp(sentTo, otp.trim());
         setSignedIn(true);
         if (!(await loadFamily())) return;
-        // First sign-in goes to set-up; returning families go straight to Today.
-        router.replace(useStore.getState().hasSummary ? '/(tabs)/today' : '/onboarding/upload');
+        // First sign-in: who are you, then the summary. Returning families go straight to Today.
+        const st = useStore.getState();
+        router.replace(!st.me.name ? '/onboarding/about-you' : st.hasSummary ? '/(tabs)/today' : '/onboarding/upload');
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Something went wrong. Please try again.');

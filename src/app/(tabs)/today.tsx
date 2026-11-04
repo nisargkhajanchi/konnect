@@ -5,7 +5,7 @@ import { Grid, QuickAction, Tile } from '@/components/grid';
 import { MonitorCard, openMonitor } from '@/components/monitor-card';
 import { Avatar, Between, Brand, Btn, Card, Grow, Ic, Pill, Row, Screen, SosButton, T, TaskRow } from '@/components/ui';
 import { bpStatus, buildTodayTasks, dayAtHome } from '@/logic/rules';
-import { STAGE_LABEL, useStore, usePatient } from '@/state/store';
+import { initials, STAGE_LABEL, useStore, usePatient } from '@/state/store';
 /** The prototype's fixed "today" (21 Oct 2026), used only in demo mode. */
 const DEMO_TODAY = new Date(2026, 9, 21);
 
@@ -20,6 +20,7 @@ export default function Today() {
   const toast = useStore((s) => s.showToast);
 
   const plan = useStore((s) => s.plan);
+  const me = useStore((s) => s.me);
   const isSample = useStore((s) => s.isSample);
   const tasks = buildTodayTasks(meds, plan, patient);
   const next = tasks.find((t) => !done[t.id]);
@@ -38,7 +39,7 @@ export default function Today() {
         <Brand />
         <Row gap={10}>
           <SosButton />
-          <Pressable accessibilityRole="button" accessibilityLabel="Account and more" onPress={() => router.push('/(tabs)/more')}><Avatar label="K" /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={me.name ? `${me.name}, account and more` : 'Account and more'} onPress={() => router.push('/(tabs)/more')}><Avatar label={initials(me.name) || '👤'} /></Pressable>
         </Row>
       </Between>
 
