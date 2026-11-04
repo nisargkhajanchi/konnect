@@ -4,7 +4,7 @@ const expoConfig = require('eslint-config-expo/flat');
 
 module.exports = defineConfig([
   expoConfig,
-  { ignores: ['dist/*', '.expo/*'] },
+  { ignores: ['dist/*', '.expo/*', 'supabase/functions/read-summary/*', 'supabase/functions/**/*.test.ts'] },
   // React Native <Text> renders quotes and apostrophes literally; this rule is for HTML.
   { rules: { 'react/no-unescaped-entities': 'off' } },
 ]);

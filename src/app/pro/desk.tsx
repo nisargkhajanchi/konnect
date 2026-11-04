@@ -2,20 +2,21 @@ import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { Pill, Screen, Sub, T } from '@/components/ui';
-import { OTHER_DESK_PATIENTS, PATIENT } from '@/data/demo';
+import { OTHER_DESK_PATIENTS } from '@/data/demo';
 import { MON_TEXT, type MonState } from '@/logic/rules';
-import { useMonState, useStore } from '@/state/store';
+import { useMonState, useStore, usePatient } from '@/state/store';
 import { C, TONE } from '@/theme';
 
 const RANK: Record<MonState, number> = { alert: 0, watch: 1, ok: 2 };
 
 /** Clinical desk: every monitored patient, most urgent first. */
 export default function Desk() {
+  const patient = usePatient();
   const mon = useStore((s) => s.mon);
   const toast = useStore((s) => s.showToast);
   const st = useMonState();
   const rows = [
-    { n: `${PATIENT.name}, ${PATIENT.age}`, s: st, sub: mon.paired ? `${PATIENT.short} · HR ${mon.v.hr} · SpO₂ ${mon.v.spo2}%` : 'Monitor not paired yet', live: true },
+    { n: `${patient.name}, ${patient.age}`, s: st, sub: mon.paired ? `${patient.short} · HR ${mon.v.hr} · SpO₂ ${mon.v.spo2}%` : 'Monitor not paired yet', live: true },
     ...OTHER_DESK_PATIENTS.map((o) => ({ ...o, live: false })),
   ].sort((a, b) => RANK[a.s] - RANK[b.s]);
 

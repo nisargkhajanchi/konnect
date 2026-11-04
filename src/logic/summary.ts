@@ -2,9 +2,7 @@
  * Builds the "Summary for your doctor" document as HTML (for PDF via expo-print)
  * and plain text (for sharing). All dynamic text is escaped.
  */
-import {
-  DOCS_ON_FILE, PAST_SERVICES, PATIENT, PLAN_POINTS, TODAY_LABEL, WARN_SIGNS, type Med,
-} from '@/data/demo';
+import { TODAY_LABEL, type Med } from '@/data/demo';
 import { clock } from '@/logic/rules';
 import type { Booking, Order, useStore } from '@/state/store';
 
@@ -37,35 +35,37 @@ export type SummaryInput = {
 const ORD_STATUS = ['Confirmed', 'Out for delivery', 'Delivered'];
 
 export function servicesDone(s: S, since: number) {
-  const arr = PAST_SERVICES.map((x) => ({ ...x }));
-  if (s.visit.stage === 4) {
+  const arr = s.pastServices.map((x) => ({ ...x }));
+  if (s.visit.id && s.visit.stage === 4) {
     const v = s.visit.vitals;
     arr.push({
-      d: 21, date: '21 Oct', svc: 'Home nurse', by: "Sunrise Home Nursing, Nurse Meera D'Souza", amount: 650, abbr: 'HN', tone: 'amber',
+      d: 21, date: s.live ? 'Latest' : '21 Oct', svc: s.visit.service, by: s.visit.provider, amount: 650, abbr: 'HN', tone: 'amber',
       note: (v ? `BP ${v.sys}/${v.dia}, pulse ${v.pul}, SpO₂ ${v.spo}%. ` : '') + s.visit.note + (s.visit.escalated ? ' The nurse flagged a concern to the clinical desk.' : ''),
     });
   }
-  return arr.filter((x) => x.d >= since);
+  // Live dates are real; the period filter uses the demo calendar only.
+  return s.live ? arr : arr.filter((x) => x.d >= since);
 }
 function upcoming(s: S): { svc: string; provider: string; when: string }[] {
   const a: { svc: string; provider: string; when: string }[] = [];
-  if (s.visit.stage < 4) a.push({ svc: 'Home nurse', provider: 'Sunrise Home Nursing', when: 'Today, 4:30 PM' });
+  if (s.visit.id && s.visit.stage < 4) a.push({ svc: s.visit.service, provider: s.visit.provider, when: s.visit.when });
   s.bookings.forEach((b: Booking) => a.push(b));
   return a;
 }
 
-function bpSvg(bp: [number, number][]) {
+function bpSvg(bp: [number, number][], limit: number) {
   const W = 560, H = 150, pad = 28, min = 60, max = 180;
   const y = (v: number) => H - 18 - ((v - min) / (max - min)) * (H - 30);
   const x = (i: number) => pad + i * ((W - pad - 12) / Math.max(1, bp.length - 1));
   let g = '';
-  [80, 100, 120, 140, 160].forEach((v) => {
-    g += `<line x1="${pad}" x2="${W - 12}" y1="${y(v)}" y2="${y(v)}" stroke="${v === 140 ? '#C3462F' : '#e5e5e5'}" stroke-width="1"${v === 140 ? ' stroke-dasharray="5 4"' : ''}/><text x="${pad - 5}" y="${y(v) + 3}" text-anchor="end" font-size="9" fill="#777">${v}</text>`;
+  [80, 100, 120, 160].forEach((v) => {
+    g += `<line x1="${pad}" x2="${W - 12}" y1="${y(v)}" y2="${y(v)}" stroke="#e5e5e5" stroke-width="1"/><text x="${pad - 5}" y="${y(v) + 3}" text-anchor="end" font-size="9" fill="#777">${v}</text>`;
   });
+  g += `<line x1="${pad}" x2="${W - 12}" y1="${y(limit)}" y2="${y(limit)}" stroke="#C3462F" stroke-width="1" stroke-dasharray="5 4"/><text x="${pad - 5}" y="${y(limit) + 3}" text-anchor="end" font-size="9" fill="#C3462F">${limit}</text>`;
   g += `<polyline points="${bp.map((p, i) => `${x(i)},${y(p[0])}`).join(' ')}" fill="none" stroke="#C97A2B" stroke-width="2.2"/>`;
   g += `<polyline points="${bp.map((p, i) => `${x(i)},${y(p[1])}`).join(' ')}" fill="none" stroke="#0E8C82" stroke-width="2.2"/>`;
   bp.forEach((p, i) => {
-    g += `<circle cx="${x(i)}" cy="${y(p[0])}" r="3" fill="${p[0] > 140 ? '#C3462F' : '#C97A2B'}"/><circle cx="${x(i)}" cy="${y(p[1])}" r="3" fill="#0E8C82"/>`;
+    g += `<circle cx="${x(i)}" cy="${y(p[0])}" r="3" fill="${p[0] > limit ? '#C3462F' : '#C97A2B'}"/><circle cx="${x(i)}" cy="${y(p[1])}" r="3" fill="#0E8C82"/>`;
   });
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:560px">${g}</svg><div class="note"><span style="color:#C97A2B">&#9632;</span> Top number &nbsp; <span style="color:#0E8C82">&#9632;</span> Bottom number. Reading 1 is the oldest.</div>`;
 }
@@ -80,12 +80,23 @@ export function buildSummary(s: S, o: SummaryInput) {
   const svcs = servicesDone(s, per.since), ups = upcoming(s);
   const bp = s.bp, last = bp[bp.length - 1];
   const sys = bp.map((p) => p[0]), dia = bp.map((p) => p[1]);
-  const above = sys.filter((v) => v > 140).length;
+  const limitSys = s.patient.bpLimit.sys;
+  const above = sys.filter((v) => v > limitSys).length;
+  const hasBp = bp.length > 0;
   const mon = s.mon;
+  const PATIENT = s.patient;
+  const fu = PATIENT.followUp;
+  const PLAN_POINTS = [
+    `${PATIENT.short}${PATIENT.discharged ? `, discharged ${PATIENT.discharged}` : ''}${PATIENT.hospital ? ` from ${PATIENT.hospital}` : ''}.${fu ? ` Follow-up: ${fu.dept}, ${fu.when}${PATIENT.doctor ? `, ${PATIENT.doctor}` : ''}.` : ''}`,
+    `Blood pressure limit ${PATIENT.bpLimit.sys}/${PATIENT.bpLimit.dia}.`,
+    ...s.plan.limits, ...s.plan.dietActivity,
+    ...(s.plan.allergies.length ? [`Allergies: ${s.plan.allergies.join(', ')}.`] : []),
+  ];
+  const WARN_SIGNS = s.plan.warningSigns.length ? s.plan.warningSigns : ['None listed in the discharge summary'];
 
   H.push(`<div class="hdr"><div><div class="brand">HOME KONNECT</div><h1>Home care summary</h1></div><div class="note" style="text-align:right">Prepared ${esc(now)}<br>Covers: ${esc(per.long)}</div></div>`);
-  H.push(`<div class="kv"><div>Patient</div><div><b>${esc(PATIENT.name)}</b>, ${PATIENT.age}</div><div>Condition</div><div>${esc(PATIENT.short)}. Discharged ${esc(PATIENT.discharged)} from ${esc(PATIENT.hospital)}</div><div>Allergy</div><div>${esc(PATIENT.allergy)}. Avoid NSAIDs</div>${o.doctor ? `<div>For</div><div>${esc(o.doctor)}</div>` : ''}${o.reason ? `<div>Visit</div><div>${esc(o.reason)}</div>` : ''}</div>`);
-  T.push(`HOME CARE SUMMARY - ${PATIENT.name}, ${PATIENT.age}`, `${PATIENT.short}. Discharged ${PATIENT.discharged} from ${PATIENT.hospital}. Allergy: ${PATIENT.allergy.toLowerCase()}, avoid NSAIDs.`);
+  H.push(`<div class="kv"><div>Patient</div><div><b>${esc(PATIENT.name)}</b>${PATIENT.age ? `, ${PATIENT.age}` : ''}</div><div>Condition</div><div>${esc(PATIENT.condition || PATIENT.short)}${PATIENT.discharged ? `. Discharged ${esc(PATIENT.discharged)}` : ''}${PATIENT.hospital ? ` from ${esc(PATIENT.hospital)}` : ''}</div><div>Allergy</div><div>${esc(PATIENT.allergy)}</div>${o.doctor ? `<div>For</div><div>${esc(o.doctor)}</div>` : ''}${o.reason ? `<div>Visit</div><div>${esc(o.reason)}</div>` : ''}</div>`);
+  T.push(`HOME CARE SUMMARY - ${PATIENT.name}${PATIENT.age ? `, ${PATIENT.age}` : ''}`, `${PATIENT.condition || PATIENT.short}. Allergy: ${PATIENT.allergy}.`);
   if (o.doctor) T.push('For: ' + o.doctor);
   if (o.reason) T.push('Visit: ' + o.reason);
   T.push(`Prepared ${now}. Covers: ${per.long}`, '');
@@ -95,8 +106,9 @@ export function buildSummary(s: S, o: SummaryInput) {
     const nv = svcs.filter((x) => /nurse/i.test(x.svc)).length, nl = svcs.length - nv;
     gl.push(svcs.length ? `${nv} nurse visit${nv === 1 ? '' : 's'}${nl ? ` and ${nl} lab collection` : ''} in this period.` : 'No home services in this period.');
   }
-  if (inc.vit) {
-    gl.push(`Latest home BP ${last[0]}/${last[1]}. Across ${bp.length} readings the top number ranged ${Math.min(...sys)} to ${Math.max(...sys)} and the bottom ${Math.min(...dia)} to ${Math.max(...dia)}. ${above ? `${above} reading${above === 1 ? '' : 's'} above the 140 limit.` : 'None above the 140 limit.'}`);
+  if (inc.vit && !hasBp) gl.push('No blood pressure readings logged at home yet.');
+  if (inc.vit && hasBp) {
+    gl.push(`Latest home BP ${last[0]}/${last[1]}. Across ${bp.length} readings the top number ranged ${Math.min(...sys)} to ${Math.max(...sys)} and the bottom ${Math.min(...dia)} to ${Math.max(...dia)}. ${above ? `${above} reading${above === 1 ? '' : 's'} above the ${limitSys} limit.` : `None above the ${limitSys} limit.`}`);
     if (mon.paired) {
       const avg = Math.round(mon.hHr.reduce((a, b) => a + b, 0) / mon.hHr.length);
       gl.push(`Home monitor, last 24 h: heart rate average ${avg} (range ${Math.min(...mon.hHr)} to ${Math.max(...mon.hHr)}), lowest oxygen ${Math.min(...mon.hSp)}%.`);
@@ -133,9 +145,9 @@ export function buildSummary(s: S, o: SummaryInput) {
     } else { H.push('<p class="note">No visit notes in this period.</p>'); T.push('No visit notes in this period.'); }
     T.push('');
   }
-  if (inc.vit) {
-    H.push(`<h3>Blood pressure logged at home</h3>${bpSvg(bp)}${tbl(['Reading', ...bp.map((_, i) => String(i + 1))], [['Top / bottom', ...bp.map((p) => `${p[0]}/${p[1]}`)]])}<p class="note">Limit from the discharge summary: 140/90 mmHg.</p>`);
-    T.push('Blood pressure logged at home (oldest to latest, limit 140/90)', bp.map((p) => `${p[0]}/${p[1]}`).join(', '), '');
+  if (inc.vit && hasBp) {
+    H.push(`<h3>Blood pressure logged at home</h3>${bpSvg(bp, limitSys)}${tbl(['Reading', ...bp.map((_, i) => String(i + 1))], [['Top / bottom', ...bp.map((p) => `${p[0]}/${p[1]}`)]])}<p class="note">Limit from the discharge summary: ${PATIENT.bpLimit.sys}/${PATIENT.bpLimit.dia} mmHg.</p>`);
+    T.push(`Blood pressure logged at home (oldest to latest, limit ${s.patient.bpLimit.sys}/${s.patient.bpLimit.dia})`, bp.map((p) => `${p[0]}/${p[1]}`).join(', '), '');
     if (mon.paired) {
       const avg = Math.round(mon.hHr.reduce((a, b) => a + b, 0) / mon.hHr.length);
       H.push(`<h3>24-hour home monitor</h3><div class="kv"><div>Heart rate</div><div>average ${avg}, range ${Math.min(...mon.hHr)} to ${Math.max(...mon.hHr)} beats a minute</div><div>Oxygen (SpO₂)</div><div>lowest ${Math.min(...mon.hSp)}%, now ${mon.v.spo2}%</div><div>Breathing</div><div>${mon.v.rr} a minute now</div><div>Temperature</div><div>${mon.v.temp.toFixed(1)} °F now</div></div>`);
@@ -180,7 +192,7 @@ export function buildSummary(s: S, o: SummaryInput) {
     T.push('CARE PLAN FROM THE DISCHARGE SUMMARY', ...PLAN_POINTS.map((p) => '- ' + p), `Warning signs given to the family: ${WARN_SIGNS.join('; ')}.`, '');
   }
   if (inc.docs) {
-    const docs = [...DOCS_ON_FILE, `Prescriptions (${s.meds.length} medicines)`];
+    const docs = [...(s.hasSummary ? [`Discharge summary${PATIENT.hospital ? `, ${PATIENT.hospital}` : ''}`] : []), `Prescriptions (${s.meds.length} medicines)`];
     H.push(`<h2>Reports the family holds</h2><ul>${docs.map((p) => `<li>${esc(p)}</li>`).join('')}</ul><p class="note">Names only. The family can show the originals.</p>`);
     T.push('REPORTS THE FAMILY HOLDS', ...docs.map((p) => '- ' + p), '');
   }

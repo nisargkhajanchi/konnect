@@ -4,11 +4,13 @@ import { Pressable, View } from 'react-native';
 import { Grid, QuickAction, Tile } from '@/components/grid';
 import { MonitorCard, openMonitor } from '@/components/monitor-card';
 import { Avatar, Between, Brand, Btn, Card, Grow, Ic, Pill, Row, Screen, SosButton, T, TaskRow } from '@/components/ui';
-import { DISCHARGE_DAY, PATIENT, TODAY_DAY } from '@/data/demo';
-import { bpStatus, buildTodayTasks } from '@/logic/rules';
-import { STAGE_LABEL, useStore } from '@/state/store';
+import { bpStatus, buildTodayTasks, dayAtHome } from '@/logic/rules';
+import { STAGE_LABEL, useStore, usePatient } from '@/state/store';
+/** The prototype's fixed "today" (21 Oct 2026), used only in demo mode. */
+const DEMO_TODAY = new Date(2026, 9, 21);
 
 export default function Today() {
+  const patient = usePatient();
   const meds = useStore((s) => s.meds);
   const hasSummary = useStore((s) => s.hasSummary);
   const done = useStore((s) => s.tasksDone);
@@ -19,10 +21,13 @@ export default function Today() {
 
   const tasks = buildTodayTasks(meds);
   const next = tasks.find((t) => !done[t.id]);
-  const last = bp[bp.length - 1];
-  const st = bpStatus(last[0]);
-  const day = TODAY_DAY - DISCHARGE_DAY + 1;
-  const visitDone = visit.stage === 4;
+  const live = useStore((s) => s.live);
+  const last = bp.length ? bp[bp.length - 1] : null;
+  const st = last ? bpStatus(last[0], patient.bpLimit.sys) : 'ok';
+  const day = dayAtHome(patient.dischargedOn, live ? new Date() : DEMO_TODAY);
+  const hasVisit = !!visit.id;
+  const visitDone = hasVisit && visit.stage === 4;
+  const fu = patient.followUp;
 
   return (
     <Screen tabs>
@@ -37,8 +42,8 @@ export default function Today() {
       <Card tone="amber" style={{ paddingVertical: 12 }}>
         <Between>
           <View>
-            <T v="h3">{PATIENT.name}</T>
-            <T v="mono" style={{ fontSize: 10.5 }}>{PATIENT.age} · {PATIENT.short} · Day {day} at home</T>
+            <T v="h3">{patient.name}</T>
+            <T v="mono" style={{ fontSize: 10.5 }}>{[patient.age, patient.short, day ? `Day ${day} at home` : null].filter(Boolean).join(' · ')}</T>
           </View>
           <Pill label={st === 'ok' ? 'On track' : 'Check BP'} tone={st === 'ok' ? 'teal' : 'amber'} />
         </Between>
@@ -48,16 +53,16 @@ export default function Today() {
         <Card tone="violet" onPress={() => router.push('/onboarding/upload')}>
           <T v="label" style={{ color: '#6B4FA0' }}>Finish setting up</T>
           <T v="bodyB">Add the discharge summary</T>
-          <T v="small">Your plan below uses sample medicines until you add it.</T>
+          <T v="small">{live ? 'Your medicines, reminders and warning signs fill in once you add it.' : 'Your plan below uses sample medicines until you add it.'}</T>
         </Card>
       ) : null}
 
       {/* What to do next: live visit beats tasks beats "all done". */}
-      {visit.stage >= 1 && visit.stage <= 3 ? (
+      {hasVisit && visit.stage >= 1 && visit.stage <= 3 ? (
         <Card tone="amber" style={{ borderWidth: 1.5, borderColor: '#C97A2B' }}>
           <T v="label">Right now</T>
           <T v="h3">{['', 'Your nurse is on the way', 'Your nurse has arrived', 'Your nurse is with you now'][visit.stage]}</T>
-          <T v="small" style={{ marginBottom: 10 }}>Home nurse · Sunrise Home Nursing</T>
+          <T v="small" style={{ marginBottom: 10 }}>{visit.service} · {visit.provider}</T>
           <Btn small title="Track live" onPress={() => router.push('/visit')} />
         </Card>
       ) : next ? (
@@ -72,7 +77,7 @@ export default function Today() {
           <T v="label" style={{ color: '#0B6E66' }}>All done for today</T>
           <T v="h3">Nothing left on today's plan</T>
           <T v="small">
-            {visitDone ? `Next: ${PATIENT.followUp.dept} follow-up, ${PATIENT.followUp.when}.` : 'Next: home nurse visit, today 4:30 PM.'}
+            {hasVisit && !visitDone ? `Next: ${visit.service.toLowerCase()}, ${visit.when}.` : fu ? `Next: ${fu.dept} follow-up, ${fu.when}.` : 'Nothing else scheduled.'}
           </T>
         </Card>
       )}
@@ -86,16 +91,24 @@ export default function Today() {
 
       <MonitorCard />
 
-      <Card onPress={() => router.push('/visit')}>
-        <T v="label">{visitDone ? 'Today’s visit' : 'Next visit'}</T>
-        <Between>
-          <Grow>
-            <T v="bodyB">Home nurse · today 4:30 PM</T>
-            <T v="small">Sunrise Home Nursing · Nurse Meera D'Souza</T>
-          </Grow>
-          <Pill label={STAGE_LABEL[visit.stage]} tone={visit.stage === 0 ? 'amber' : visit.stage === 1 ? 'blue' : visit.stage === 2 ? 'violet' : 'teal'} />
-        </Between>
-      </Card>
+      {hasVisit ? (
+        <Card onPress={() => router.push('/visit')}>
+          <T v="label">{visitDone ? 'Latest visit' : 'Next visit'}</T>
+          <Between>
+            <Grow>
+              <T v="bodyB">{visit.service} · {visit.when}</T>
+              <T v="small">{visit.provider}{live ? '' : " · Nurse Meera D'Souza"}</T>
+            </Grow>
+            <Pill label={STAGE_LABEL[visit.stage]} tone={visit.stage === 0 ? 'amber' : visit.stage === 1 ? 'blue' : visit.stage === 2 ? 'violet' : 'teal'} />
+          </Between>
+        </Card>
+      ) : (
+        <Card onPress={() => router.push('/(tabs)/care')}>
+          <T v="label">Visits</T>
+          <T v="bodyB">No visit booked yet</T>
+          <T v="small">Book a nurse or physio and follow the visit live here.</T>
+        </Card>
+      )}
 
       <T v="sect">Today's plan from your discharge summary</T>
       <Card>
@@ -109,23 +122,25 @@ export default function Today() {
         <Between>
           <View>
             <T v="small">Blood pressure · latest</T>
-            <T v="big">{last[0]}/{last[1]} <T v="small">mmHg</T></T>
+            {last ? <T v="big">{last[0]}/{last[1]} <T v="small">mmHg</T></T> : <T v="bodyB">No reading yet. Tap to log one.</T>}
           </View>
-          <Pill label={st === 'ok' ? 'Within range' : 'Above limit'} tone={st === 'ok' ? 'teal' : st === 'amber' ? 'amber' : 'red'} />
+          {last ? <Pill label={st === 'ok' ? 'Within range' : 'Above limit'} tone={st === 'ok' ? 'teal' : st === 'amber' ? 'amber' : 'red'} /> : null}
         </Between>
       </Card>
 
-      <Card tone="teal" onPress={() => router.push('/care-plan')}>
-        <T v="label" style={{ color: '#0B6E66' }}>From your discharge summary</T>
-        <T v="bodyB" style={{ fontSize: 13.5 }}>Follow-up with {PATIENT.followUp.dept} · {PATIENT.followUp.when}</T>
-        <T v="small">{PATIENT.doctor}, {PATIENT.hospital}. Reminders are on. Tap to see your plan and warning signs.</T>
-      </Card>
+      {fu ? (
+        <Card tone="teal" onPress={() => router.push('/care-plan')}>
+          <T v="label" style={{ color: '#0B6E66' }}>From your discharge summary</T>
+          <T v="bodyB" style={{ fontSize: 13.5 }}>Follow-up with {fu.dept} · {fu.when}</T>
+          <T v="small">{[patient.doctor, fu.where || patient.hospital].filter(Boolean).join(', ')}. Tap to see your plan and warning signs.</T>
+        </Card>
+      ) : null}
 
       <Card onPress={() => router.push('/summary')}>
         <Row>
           <Ic label="SUM" tone="amber" />
           <Grow>
-            <T v="bodyB" style={{ fontSize: 13.5 }}>Seeing the doctor on 28 Oct?</T>
+            <T v="bodyB" style={{ fontSize: 13.5 }}>{fu ? `Seeing the doctor on ${fu.when.split(',')[0]}?` : 'Seeing a doctor soon?'}</T>
             <T v="small">Create a summary of services and health updates to take along.</T>
           </Grow>
         </Row>

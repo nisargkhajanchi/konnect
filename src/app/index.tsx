@@ -1,13 +1,52 @@
 import { router } from 'expo-router';
-import { View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LinearGradientFallback } from '@/components/hero';
 import { Brand, Btn, Card, Ic, Row, T } from '@/components/ui';
+import * as api from '@/lib/api';
+import { useStore, type ProRole } from '@/state/store';
 import { C } from '@/theme';
 
-/** Role switch: the same app serves families and care providers. */
+/** Role switch: the same app serves families and care providers. Live mode resumes a saved session. */
 export default function Welcome() {
+  const live = useStore((s) => s.live);
+  const [restoring, setRestoring] = useState(live);
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    (async () => {
+      const profile = await api.getProfile().catch(() => null);
+      if (cancelled) return;
+      if (!profile) { setRestoring(false); return; }
+      const st = useStore.getState();
+      st.setSignedIn(true);
+      if (profile.kind === 'provider') {
+        const roles: Record<string, ProRole> = { nurse: 'Nurse', physio: 'Physiotherapist', coordinator: 'Coordinator', supplier: 'Equipment supplier' };
+        const role = roles[profile.provider_role ?? ''] ?? 'Nurse';
+        st.setProRole(role);
+        await st.loadProvider();
+        router.replace(role === 'Equipment supplier' ? '/pro/rates' : '/pro/today');
+      } else if (await st.loadFamily()) {
+        router.replace(useStore.getState().hasSummary ? '/(tabs)/today' : '/onboarding/upload');
+      } else {
+        setRestoring(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [live]);
+
+  if (restoring) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+        <Brand />
+        <ActivityIndicator color={C.teal} />
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <LinearGradientFallback>

@@ -2,13 +2,14 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Text, View } from 'react-native';
 
 import { Btn, Card, PriceLine, Screen, StepDot, T, TaskRow } from '@/components/ui';
-import { PATIENT } from '@/data/demo';
-import { useStore } from '@/state/store';
+
+import { usePatient } from '@/state/store';
 import { C, F } from '@/theme';
 
 export default function Booked() {
-  const { ref } = useLocalSearchParams<{ ref: string }>();
-  const b = useStore((s) => s.bookings.find((x) => x.ref === ref));
+  const patient = usePatient();
+  const b = useLocalSearchParams<{ ref: string; svc: string; provider: string; when: string }>();
+  const ref = b.ref;
 
   return (
     <Screen>
@@ -21,7 +22,7 @@ export default function Booked() {
       </View>
       <Card>
         <PriceLine l="When" r={b?.when ?? ''} />
-        <PriceLine l="Where" r={PATIENT.address.split(',').slice(0, 2).join(',')} />
+        <PriceLine l="Where" r={patient.address.split(',').slice(0, 2).join(',')} />
         <PriceLine l="Booking" r={ref ?? ''} />
       </Card>
       <T v="sect">What happens next</T>

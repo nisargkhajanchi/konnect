@@ -2,16 +2,17 @@ import { router, type Href } from 'expo-router';
 
 import { openMonitor } from '@/components/monitor-card';
 import { Card, Grow, Ic, Row, Screen, T } from '@/components/ui';
-import { PATIENT } from '@/data/demo';
-import { useStore } from '@/state/store';
+
+import { useStore, usePatient } from '@/state/store';
 import type { Tone } from '@/theme';
 
 type Item = { ic: string; tone: Tone; t: string; s: string; go: () => void };
 const to = (h: Href) => () => router.push(h);
 
 export default function More() {
+  const patient = usePatient();
   const toast = useStore((s) => s.showToast);
-  const setSignedIn = useStore((s) => s.setSignedIn);
+  const signOut = useStore((s) => s.signOut);
   const groups: [string, Item[]][] = [
     ['His care', [
       { ic: 'CP', tone: 'teal', t: 'Care plan', s: 'From your discharge summary', go: to('/care-plan') },
@@ -29,14 +30,14 @@ export default function More() {
     ]],
     ['Account', [
       { ic: 'WB', tone: 'violet', t: 'Wellbeing and programmes', s: 'Diet, yoga, BP and sugar programmes', go: () => toast('Wellbeing programmes are coming soon.') },
-      { ic: '↩', tone: 'red', t: 'Sign out', s: 'Back to the start screen', go: () => { setSignedIn(false); router.dismissTo('/'); } },
+      { ic: '↩', tone: 'red', t: 'Sign out', s: 'Back to the start screen', go: () => { signOut().finally(() => router.dismissTo('/')); } },
     ]],
   ];
 
   return (
     <Screen tabs>
       <T v="label">More</T>
-      <T v="h2">{PATIENT.first}'s account</T>
+      <T v="h2">{patient.first}'s account</T>
       {groups.map(([title, items], gi) => (
         <Grow key={title}>
           <T v="sect" style={gi === 0 ? { marginTop: 4 } : undefined}>{title}</T>

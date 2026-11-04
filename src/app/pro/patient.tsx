@@ -2,13 +2,14 @@ import { Spark } from '@/components/charts';
 import { MonStatus } from '@/components/mon-status';
 import { VGrid, VTile } from '@/components/vitals';
 import { Btn, Card, Screen, Sub, T } from '@/components/ui';
-import { PATIENT } from '@/data/demo';
+
 import { monFlags } from '@/logic/rules';
-import { ALERT_STEPS, useMonState, useStore } from '@/state/store';
+import { ALERT_STEPS, useMonState, useStore, usePatient } from '@/state/store';
 import { C } from '@/theme';
 
 /** Desk view of one monitored patient, with the response actions. */
 export default function DeskPatient() {
+  const patient = usePatient();
   const mon = useStore((s) => s.mon);
   const setStep = useStore((s) => s.setAlertStep);
   const toast = useStore((s) => s.showToast);
@@ -19,8 +20,8 @@ export default function DeskPatient() {
 
   return (
     <Screen>
-      <T v="h2">{PATIENT.name}</T>
-      <Sub>{PATIENT.age} · {PATIENT.short}, {PATIENT.discharged} · Home, Shantigram</Sub>
+      <T v="h2">{patient.name}</T>
+      <Sub>{patient.age} · {patient.short}, {patient.discharged} · Home, Shantigram</Sub>
       <MonStatus st={st} extra={mon.alert ? (mon.step === 3 ? 'resolved' : ALERT_STEPS[mon.step].toLowerCase()) : undefined} />
       <VGrid>
         <VTile label="Heart rate" value={mon.v.hr} unit="bpm" alert={f.hr} />

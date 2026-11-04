@@ -2,13 +2,35 @@
  * Demo data. Everything here is placeholder content from the prototype.
  * Replace with API calls when the backend exists; screens read through the store.
  */
+import type { Extraction } from '@shared/extraction';
 import type { Tone } from '@/theme';
 
 export const TODAY_DAY = 21;
 export const TODAY_LABEL = '21 Oct';
 export const DISCHARGE_DAY = 19;
 
-export const PATIENT = {
+export type FollowUp = { dept: string; when: string; where: string };
+export type Patient = {
+  id: string | null;
+  name: string;
+  first: string;
+  age: number | null;
+  condition: string;
+  short: string;
+  hospital: string;
+  discharged: string;
+  /** ISO date, for counting days at home. */
+  dischargedOn: string | null;
+  address: string;
+  allergy: string;
+  doctor: string;
+  followUp: FollowUp | null;
+  bpLimit: { sys: number; dia: number };
+};
+export type CarePlan = { warningSigns: string[]; limits: string[]; dietActivity: string[]; allergies: string[] };
+
+export const PATIENT: Patient = {
+  id: null,
   name: 'Rameshbhai Patel',
   first: 'Rameshbhai',
   age: 62,
@@ -16,6 +38,7 @@ export const PATIENT = {
   short: 'Heart attack',
   hospital: 'City Care Hospital',
   discharged: '19 Oct',
+  dischargedOn: '2026-10-19',
   address: 'B-204, Shantigram, Ahmedabad',
   allergy: 'Penicillin',
   doctor: 'Dr. S. Rao',
@@ -25,20 +48,35 @@ export const PATIENT = {
 
 export type Med = { id: string; name: string; time: string; ok: boolean; why?: string; taken: boolean };
 
-/** What the (simulated) document reader extracted. One item is low-confidence on purpose. */
-export const EXTRACTED_MEDS: Med[] = [
-  { id: 'm1', name: 'Aspirin 75 mg', time: 'Morning, after breakfast', ok: true, taken: false },
-  { id: 'm2', name: 'Atorvastatin 40 mg', time: 'Night, after dinner', ok: true, taken: false },
-  { id: 'm3', name: 'Metoprolol 25 mg', time: 'Morning and evening', ok: false, why: 'We read the dose as 25 mg but the print is faint.', taken: false },
-  { id: 'm4', name: 'Pantoprazole 40 mg', time: 'Morning, before breakfast', ok: true, taken: false },
-];
-
-export const DOCTOR_LIMITS = [
-  { t: 'Keep BP below 140/90', src: 'Page 2, "Advice on discharge"' },
-  { t: 'Chest pain, breathlessness, fainting: go to the ER', src: 'Page 2' },
-  { t: 'Low-salt diet, no heavy lifting, no driving for 2 weeks', src: 'Page 2' },
-  { t: 'Allergy: penicillin', src: 'Page 1' },
-];
+/** Demo stand-in for what the reader returns. One medicine is low-confidence on purpose. */
+export const SAMPLE_EXTRACTION: Extraction = {
+  is_discharge_summary: true,
+  legibility: 'partly_unclear',
+  patient: { name: 'Rameshbhai Patel', age: 62, sex: 'M' },
+  hospital: { name: 'City Care Hospital', discharge_date: '2026-10-19' },
+  diagnosis: { text: 'Heart attack (NSTEMI), stent placed', confidence: 'high', source_page: 1 },
+  treating_doctor: 'Dr. S. Rao',
+  medicines: [
+    { name: 'Aspirin', strength: '75 mg', dose: '1 tablet', frequency: '1-0-0', timing: 'Morning, after breakfast', duration: null, instructions: null, confidence: 'high', uncertainty_reason: null, source_page: 2 },
+    { name: 'Atorvastatin', strength: '40 mg', dose: '1 tablet', frequency: '0-0-1', timing: 'Night, after dinner', duration: null, instructions: null, confidence: 'high', uncertainty_reason: null, source_page: 2 },
+    { name: 'Metoprolol', strength: '25 mg', dose: '1 tablet', frequency: '1-0-1', timing: 'Morning and evening', duration: null, instructions: null, confidence: 'low', uncertainty_reason: 'We read the dose as 25 mg but the print is faint.', source_page: 2 },
+    { name: 'Pantoprazole', strength: '40 mg', dose: '1 tablet', frequency: '1-0-0', timing: 'Morning, before breakfast', duration: null, instructions: null, confidence: 'high', uncertainty_reason: null, source_page: 2 },
+  ],
+  follow_ups: [{ department: 'Cardiology', doctor: 'Dr. S. Rao', date: '2026-10-28', time: '11:30 AM', place: 'City Care Hospital OPD', confidence: 'high', source_page: 2 }],
+  bp_limit: { sys: 140, dia: 90 },
+  limits: [
+    { text: 'Keep BP below 140/90', source_page: 2 },
+    { text: 'No heavy lifting, no driving for 2 weeks', source_page: 2 },
+  ],
+  warning_signs: [
+    { text: 'Chest pain or pressure lasting more than 10 minutes', source_page: 2 },
+    { text: 'Breathless at rest or cannot lie flat', source_page: 2 },
+    { text: 'Fainting, confusion or a very slow pulse', source_page: 2 },
+    { text: 'Top BP number above 160', source_page: 2 },
+  ],
+  allergies: [{ text: 'Penicillin', source_page: 1 }],
+  diet_activity: [{ text: 'Under 5 g salt a day. No fried or packaged food. Two litres of fluids unless told otherwise.', source_page: 2 }],
+};
 
 export const PLAN_STEPS = [
   { t: 'Days 1 to 3 · Rest and watch', s: 'Short indoor walks. BP and pulse twice daily.' },

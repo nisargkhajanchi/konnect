@@ -3,22 +3,23 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Btn, Card, ChoiceChips, Field, FieldLabel, LinkText, PriceLine, Screen, T, TaskRow } from '@/components/ui';
-import { PATIENT } from '@/data/demo';
+
 import { calcLine } from '@/logic/rules';
-import { useStore, type Order } from '@/state/store';
+import { useStore, type Order, usePatient } from '@/state/store';
 import { C, F, inr } from '@/theme';
 
 const SLOTS = ['Tomorrow, 9 AM to 1 PM', 'Tomorrow, 2 PM to 6 PM', 'Thu 23 Oct, morning'] as const;
 const PAYS = ['UPI on delivery', 'Card', 'Insurance claim'] as const;
 
 export default function EquipOrder() {
+  const patient = usePatient();
   const cart = useStore((s) => s.cart);
   const equipment = useStore((s) => s.equipment);
   const remove = useStore((s) => s.removeFromCart);
   const place = useStore((s) => s.placeOrder);
   const [slot, setSlot] = useState<(typeof SLOTS)[number]>(SLOTS[0]);
   const [pay, setPay] = useState<(typeof PAYS)[number]>(PAYS[0]);
-  const [addr, setAddr] = useState(PATIENT.address);
+  const [addr, setAddr] = useState(patient.address);
   const [placed, setPlaced] = useState<Order | null>(null);
 
   if (placed) {

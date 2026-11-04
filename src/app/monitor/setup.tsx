@@ -4,14 +4,15 @@ import { View } from 'react-native';
 
 import { VGrid, VTile } from '@/components/vitals';
 import { Banner, Between, Btn, Card, ChoiceChips, Field, FieldLabel, Grow, Row, Screen, StepDot, Stepper, Sub, T, TaskRow, Toggle } from '@/components/ui';
-import { PATIENT } from '@/data/demo';
-import { useStore } from '@/state/store';
+
+import { useStore, usePatient } from '@/state/store';
 import { C } from '@/theme';
 
 const INSTALL = ['Delivered and installed by a nurse', 'Delivered, I set it up'] as const;
 const WHEN = ['Today 6:00 PM', 'Tomorrow 10:00 AM'] as const;
 
 export default function MonitorSetup() {
+  const patient = usePatient();
   const { step: startStep } = useLocalSearchParams<{ step?: string }>();
   const mon = useStore((s) => s.mon);
   const setThr = useStore((s) => s.setThreshold);
@@ -57,7 +58,7 @@ export default function MonitorSetup() {
           <Sub>A nurse can bring it, place it and test it with you.</Sub>
           <ChoiceChips options={INSTALL} value={install} onChange={setInstall} />
           <View style={{ height: 14 }} />
-          <Field label="Address" defaultValue={PATIENT.address} />
+          <Field label="Address" defaultValue={patient.address} />
           <FieldLabel>When</FieldLabel>
           <ChoiceChips options={WHEN} value={when} onChange={setWhen} />
         </View>

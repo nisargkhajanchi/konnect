@@ -3,8 +3,12 @@
 Home-care app for families after a hospital discharge, plus the care-provider side of the same visits.
 Built with **Expo (React Native) SDK 58**, so one codebase runs on iPhone and Android.
 
-This is a port of the HTML prototype to a real app. **All data is demo data** held in memory: nothing is saved
-between launches and nothing talks to a server yet.
+The app runs in two modes:
+
+- **Demo mode** (default, no setup): all data is sample data in memory, as in the HTML prototype.
+- **Live mode**: add Supabase keys to `.env` (see [`supabase/README.md`](supabase/README.md)) and you get real
+  phone-OTP login, saved data, discharge summaries read by Claude, and nurse visits that sync live between the
+  family's phone and the nurse's phone.
 
 ## Run it on your iPhone (no Mac needed)
 
@@ -28,8 +32,8 @@ an Apple Developer account. No Xcode required.
 | Family, from those | Providers (4 sorts) → provider → 3-step booking → confirmed · live visit tracker · care plan · **SOS** triage (real 108 dial) · equipment rent/buy → order · 24-hour monitor (plans, 5-step setup, live view with alerts) · doctor summary (PDF / share) · bills and claims · care circle |
 | Provider | Sign-in with role · Nurse/Physio day list · visit workflow (door code, checklist, readings, flag, complete) · monitoring desk sorted by risk · desk patient actions · supplier rate card and order fulfilment |
 
-Both sides share one store (`src/state/store.ts`), so when the nurse completes a visit the family sees it
-immediately, just like the prototype's two-sided demo.
+Both sides share one store (`src/state/store.ts`). In live mode the store loads from and writes to Supabase,
+and visits stream in real time, so the nurse's progress shows on the family's phone as it happens.
 
 ## Project layout
 
@@ -39,10 +43,12 @@ src/
     (tabs)/       Family tab bar: today, care, visits, health, more
     pro/          Care-provider screens
   components/     Shared UI (ui.tsx), charts, tiles
-  data/demo.ts    All demo content. Replace with API calls.
-  logic/          Pure rules: pricing, triage, BP/monitor scoring, doctor summary builder
-  state/store.ts  App state (zustand)
+  data/demo.ts    Demo content and the core types (Patient, CarePlan, Med)
+  lib/            Supabase client and every backend call (api.ts)
+  logic/          Pure rules: pricing, triage, BP/monitor scoring, plan building, doctor summary
+  state/store.ts  App state (zustand); demo or live
   theme.ts        Colours and fonts from the prototype
+supabase/         Database migration, security tests, and the read-summary function (see its README)
 ```
 
 ## Changes from the HTML prototype
@@ -55,12 +61,18 @@ src/
 - Monitor history scrolls over time instead of only rewriting the last point.
 - Native iOS pieces: system tab bar, swipe-back, haptics, camera and document pickers, share sheet, PDF via the print system.
 
-## Not done yet (needs a backend or decisions)
+## What is live vs still demo
 
-- **Reading the discharge summary is simulated.** The review screen always shows the sample extraction.
-- Real OTP login, saved data, provider accounts, payments, chat/calls, video doctor, pharmacy orders.
-- App icon and splash are still Expo defaults.
-- Clinical rules (BP limits, SOS weights, monitor scoring) are demo values and need clinical sign-off.
+| Live (with Supabase) | Still demo in both modes |
+|---|---|
+| Phone OTP login (family and provider) | Provider list, prices and ratings |
+| Discharge summary upload and reading by Claude, family review | Equipment orders and supplier rate card |
+| Patient, medicines, care plan, BP readings saved | 24-hour monitor and monitoring desk |
+| Booking a visit, record sharing on/off | Bills, claim pack, care circle |
+| Nurse visit workflow with door code, synced live | Chat, calls, video doctor, pharmacy reorder |
+
+Also still to do: multi-page photo upload (use a PDF for now), app icon and splash, and clinical sign-off on
+the BP limits, SOS weights and monitor scoring.
 
 ## Checks
 
@@ -68,3 +80,5 @@ src/
 npx tsc --noEmit     # typecheck
 npx expo lint        # lint
 ```
+
+Backend tests are described in [`supabase/README.md`](supabase/README.md).

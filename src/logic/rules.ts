@@ -8,10 +8,19 @@ import { inr } from '@/theme';
 
 /* ---------- blood pressure ---------- */
 export type BpStatus = 'ok' | 'amber' | 'red';
-export function bpStatus(sys: number): BpStatus {
+export function bpStatus(sys: number, limitSys = PATIENT.bpLimit.sys): BpStatus {
   if (sys >= 160) return 'red';
-  if (sys > PATIENT.bpLimit.sys) return 'amber';
+  if (sys > limitSys) return 'amber';
   return 'ok';
+}
+
+/** Day number since discharge (discharge day is day 1). Demo mode counts from the demo "today". */
+export function dayAtHome(dischargedOn: string | null, today: Date): number | null {
+  if (!dischargedOn) return null;
+  const d = new Date(dischargedOn + 'T00:00:00');
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const n = Math.round((t.getTime() - d.getTime()) / 86400000) + 1;
+  return n >= 1 && n <= 365 ? n : null;
 }
 
 /* ---------- SOS triage ---------- */

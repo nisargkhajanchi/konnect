@@ -5,9 +5,9 @@ import { View } from 'react-native';
 import {
   Banner, Between, Btn, Card, ChoiceChips, Field, FieldLabel, Grow, Ic, LinkText, Pill, PriceLine, Row, Screen, Seg, Sub, T, Toggle,
 } from '@/components/ui';
-import { EQ_CATS, PATIENT, type Equip } from '@/data/demo';
+import { EQ_CATS, type Equip } from '@/data/demo';
 import { rateText, rentUnits } from '@/logic/rules';
-import { useStore } from '@/state/store';
+import { useStore, usePatient } from '@/state/store';
 import { C, inr } from '@/theme';
 
 const ORD = ['Confirmed', 'Out for delivery', 'Delivered'] as const;
@@ -16,9 +16,10 @@ const ORD_TONE = ['amber', 'blue', 'teal'] as const;
 export default function Rates() {
   const [tab, setTab] = useState<'rates' | 'orders'>('rates');
   const orders = useStore((s) => s.orders);
+  const signOut = useStore((s) => s.signOut);
   return (
     <Screen>
-      <Stack.Screen options={{ headerRight: () => <LinkText title="Sign out" onPress={() => router.dismissTo('/')} /> }} />
+      <Stack.Screen options={{ headerRight: () => <LinkText title="Sign out" onPress={() => { signOut().finally(() => router.dismissTo('/')); }} /> }} />
       <Card style={{ backgroundColor: C.navy, borderWidth: 0 }}>
         <Between>
           <Grow>
@@ -174,6 +175,7 @@ function EditForm({ item, onDone }: { item: Equip | null; onDone: () => void }) 
 }
 
 function Orders() {
+  const patient = usePatient();
   const orders = useStore((s) => s.orders);
   const advance = useStore((s) => s.advanceOrder);
   const toast = useStore((s) => s.showToast);
@@ -185,7 +187,7 @@ function Orders() {
         return (
           <Card key={o.ref}>
             <Between><T v="label" style={{ marginBottom: 0 }}>{o.ref}</T><Pill label={ORD[o.status]} tone={ORD_TONE[o.status]} /></Between>
-            <T v="small" style={{ marginVertical: 6 }}>{PATIENT.name} · {PATIENT.address.split(',').slice(0, 2).join(',')} · {o.slot}</T>
+            <T v="small" style={{ marginVertical: 6 }}>{patient.name} · {patient.address.split(',').slice(0, 2).join(',')} · {o.slot}</T>
             {o.lines.map((l) => <PriceLine key={l.id} l={`${l.name}\n${l.desc}${l.per ? ` at ${inr(l.rate)}/${l.per}` : ''}`} r={inr(l.price)} />)}
             <PriceLine l="Delivery and setup" r={inr(o.lines.reduce((a, l) => a + l.delivery, 0))} />
             <PriceLine l="Refundable deposit" r={inr(o.lines.reduce((a, l) => a + l.deposit, 0))} />

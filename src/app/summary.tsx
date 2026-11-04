@@ -5,13 +5,14 @@ import { useState } from 'react';
 import { Share, View } from 'react-native';
 
 import { Banner, Between, Btn, Card, ChoiceChips, Field, Grow, Row, Screen, Sub, T, Toggle } from '@/components/ui';
-import { PATIENT } from '@/data/demo';
+
 import { buildSummary, PERIODS, SUM_SECTIONS, type Period, type SumKey } from '@/logic/summary';
-import { useStore } from '@/state/store';
+import { useStore, usePatient } from '@/state/store';
 
 const ALL_ON = Object.fromEntries(SUM_SECTIONS.map((x) => [x.k, true])) as Record<SumKey, boolean>;
 
 export default function DoctorSummary() {
+  const patient = usePatient();
   const { saved } = useLocalSearchParams<{ saved?: string }>();
   const savedCopy = useStore((s) => (saved != null ? s.summaries[Number(saved)] : undefined));
   const saveSummary = useStore((s) => s.saveSummary);
@@ -19,8 +20,8 @@ export default function DoctorSummary() {
   const [period, setPeriod] = useState<Period>('all');
   const [inc, setInc] = useState(ALL_ON);
   const [showOpts, setShowOpts] = useState(false);
-  const [doctor, setDoctor] = useState(`${PATIENT.doctor}, ${PATIENT.hospital}`);
-  const [reason, setReason] = useState(`${PATIENT.followUp.dept} follow-up, 28 Oct`);
+  const [doctor, setDoctor] = useState(`${patient.doctor}, ${patient.hospital}`);
+  const [reason, setReason] = useState(patient.followUp ? `${patient.followUp.dept} follow-up, ${patient.followUp.when}` : '');
   const [qs, setQs] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [useSaved, setUseSaved] = useState(!!savedCopy);

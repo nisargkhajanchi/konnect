@@ -5,8 +5,8 @@ import { View } from 'react-native';
 import {
   Between, Btn, Card, ChoiceChips, Field, FieldLabel, Grow, PriceLine, Row, Screen, T, Toggle,
 } from '@/components/ui';
-import { BOOK_DAYS, BOOK_TIMES, PACKS, PATIENT } from '@/data/demo';
-import { useStore } from '@/state/store';
+import { BOOK_DAYS, BOOK_TIMES, PACKS } from '@/data/demo';
+import { useStore, usePatient } from '@/state/store';
 import { C, inr } from '@/theme';
 
 const PACK_LABELS = PACKS.map((p) => p.label);
@@ -14,30 +14,58 @@ const PREFS = ['No preference', 'Female', 'Male'] as const;
 const PAYS = ['UPI after visit', 'Card', 'Insurance claim'] as const;
 const STEP_NAMES = ['When', 'Your details', 'Review and pay'];
 
+/** Tomorrow and the two days after, labelled like "Tomorrow" / "Thu 6 Nov". */
+function nextDays() {
+  return [1, 2, 3].map((n) => {
+    const date = new Date(Date.now() + n * 86400000);
+    const label = n === 1 ? 'Tomorrow' : date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '');
+    return { label, date };
+  });
+}
+function demoDays() {
+  return BOOK_DAYS.map((label, i) => ({ label, date: new Date(Date.now() + (i + 1) * 86400000) }));
+}
+/** Sets "4:30 PM" on the given day, in the phone's time zone. */
+function atTime(day: Date, time: string) {
+  const m = /^(\d{1,2}):(\d{2}) ([AP]M)$/.exec(time);
+  const d = new Date(day);
+  if (m) d.setHours((Number(m[1]) % 12) + (m[3] === 'PM' ? 12 : 0), Number(m[2]), 0, 0);
+  return d;
+}
+
 export default function Book() {
+  const patient = usePatient();
   const { provider, service = 'Home nursing' } = useLocalSearchParams<{ provider: string; service?: string }>();
   const p = useStore((s) => s.providers.find((x) => x.id === provider));
   const addBooking = useStore((s) => s.addBooking);
   const setShare = useStore((s) => s.setShare);
 
+  const live = useStore((s) => s.live);
+  // Computed once per visit to the screen, so the dates don't shift between renders.
+  const [days] = useState(() => (live ? nextDays() : demoDays()));
   const [step, setStep] = useState(1);
   const [pack, setPack] = useState(PACK_LABELS[0]);
-  const [day, setDay] = useState(BOOK_DAYS[0]);
+  const [day, setDay] = useState(days[0].label);
   const [time, setTime] = useState(BOOK_TIMES[1]);
   const [pref, setPref] = useState<(typeof PREFS)[number]>('No preference');
-  const [addr, setAddr] = useState(PATIENT.address);
+  const [addr, setAddr] = useState(patient.address);
   const [share, setShareOn] = useState(true);
   const [pay, setPay] = useState<(typeof PAYS)[number]>('UPI after visit');
+  const [busy, setBusy] = useState(false);
 
   if (!p) return <Screen><T>Provider not found.</T></Screen>;
   const pk = PACKS.find((x) => x.label === pack)!;
   const total = Math.round(p.price * pk.n * pk.disc);
 
-  const next = () => {
+  const next = async () => {
     if (step < 3) { setStep(step + 1); return; }
-    const b = addBooking({ svc: service, provider: p.name, when: `${day}, ${time}`, total });
-    setShare(share ? 'active' : 'off');
-    router.replace({ pathname: '/booked', params: { ref: b.ref } });
+    setBusy(true);
+    const at = atTime(days.find((d) => d.label === day)!.date, time);
+    const b = await addBooking({ svc: service, provider: p.name, when: `${day}, ${time}`, total, providerId: p.id, at, share });
+    setBusy(false);
+    if (!b) return;
+    if (!live) setShare(share ? 'active' : 'off');
+    router.replace({ pathname: '/booked', params: { ref: b.ref, svc: b.svc, provider: b.provider, when: b.when } });
   };
 
   return (
@@ -47,7 +75,7 @@ export default function Book() {
           {step < 3 ? <Between style={{ marginBottom: 8 }}><T v="small">Total</T><T v="h3">{inr(total)}</T></Between> : null}
           <Row gap={8}>
             {step > 1 ? <Btn v="ghost" title="Back" onPress={() => setStep(step - 1)} style={{ flex: 0.55 }} /> : null}
-            <Btn title={['Next: your details', 'Next: review and pay', 'Confirm booking'][step - 1]} onPress={next} style={{ flex: 1 }} />
+            <Btn title={busy ? 'Booking…' : ['Next: your details', 'Next: review and pay', 'Confirm booking'][step - 1]} onPress={next} disabled={busy} style={{ flex: 1 }} />
           </Row>
         </View>
       }>
@@ -64,7 +92,7 @@ export default function Book() {
           <ChoiceChips options={PACK_LABELS} value={pack} onChange={setPack} />
           <View style={{ height: 14 }} />
           <FieldLabel>Day</FieldLabel>
-          <ChoiceChips options={BOOK_DAYS} value={day} onChange={setDay} />
+          <ChoiceChips options={days.map((d) => d.label)} value={day} onChange={setDay} />
           <View style={{ height: 14 }} />
           <FieldLabel>Time</FieldLabel>
           <ChoiceChips options={BOOK_TIMES} value={time} onChange={setTime} />

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 
 import { Banner, Btn, Card, Ic, Screen, T, TaskRow } from '@/components/ui';
-import { PAST_SERVICES } from '@/data/demo';
 import { useStore } from '@/state/store';
 import { C, F, inr, type Tone } from '@/theme';
 
 export default function Bills() {
   const visit = useStore((s) => s.visit);
+  const PAST_SERVICES = useStore((s) => s.pastServices);
+  const visitDone = !!visit.id && visit.stage === 4;
   const orders = useStore((s) => s.orders);
   const ready = useStore((s) => s.claimReady);
   const setReady = useStore((s) => s.setClaimReady);
@@ -16,14 +17,14 @@ export default function Bills() {
     t: `${p.svc} · ${p.date}`, s: p.by, a: p.amount, ic: p.abbr, tone: p.tone,
   }));
   // Today's visit is billed once the nurse completes it.
-  if (visit.stage === 4) rows.unshift({ t: 'Home nurse · 21 Oct', s: 'Sunrise Home Nursing', a: 650, ic: 'HN', tone: 'amber' });
+  if (visitDone) rows.unshift({ t: `${visit.service} · ${visit.when.split(',')[0]}`, s: visit.provider, a: 650, ic: 'HN', tone: 'amber' });
   let deposits = 0, eqN = 0;
   orders.forEach((o) => o.lines.forEach((l) => {
     eqN++; deposits += l.deposit;
     rows.push({ t: `Equipment · ${l.name}`, s: `Home Konnect supply · ${l.desc}${l.delivery > 0 ? ` · incl. delivery ${inr(l.delivery)}` : ''}`, a: l.price + l.delivery, ic: 'EQ', tone: 'teal' });
   }));
   const total = rows.reduce((a, r) => a + r.a, 0);
-  const nurses = PAST_SERVICES.filter((p) => /nurse/i.test(p.svc)).length + (visit.stage === 4 ? 1 : 0);
+  const nurses = PAST_SERVICES.filter((p) => /nurse/i.test(p.svc)).length + (visitDone ? 1 : 0);
 
   const make = () => { setBusy(true); setTimeout(() => { setReady(); setBusy(false); }, 800); };
 

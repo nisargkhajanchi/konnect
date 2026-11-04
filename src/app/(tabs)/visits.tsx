@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 
 import { Between, Btn, Card, Grow, Pill, Screen, Seg, T } from '@/components/ui';
-import { PAST_SERVICES } from '@/data/demo';
 import { STAGE_LABEL, useStore } from '@/state/store';
 
 const ORD = ['Confirmed', 'Out for delivery', 'Delivered'] as const;
@@ -13,7 +12,10 @@ export default function Visits() {
   const visit = useStore((s) => s.visit);
   const bookings = useStore((s) => s.bookings);
   const orders = useStore((s) => s.orders);
-  const done = visit.stage === 4;
+  const live = useStore((s) => s.live);
+  const PAST_SERVICES = useStore((s) => s.pastServices);
+  const has = !!visit.id;
+  const done = has && visit.stage === 4;
 
   return (
     <Screen tabs>
@@ -24,13 +26,13 @@ export default function Visits() {
 
       {tab === 'up' ? (
         <>
-          {!done ? (
+          {has && !done ? (
             <Card onPress={() => router.push('/visit')}>
-              <T v="label">Today · 4:30 PM</T>
+              <T v="label">{visit.when}</T>
               <Between>
                 <Grow>
-                  <T v="bodyB">Home nurse</T>
-                  <T v="small">Sunrise Home Nursing · Meera D'Souza</T>
+                  <T v="bodyB">{visit.service}</T>
+                  <T v="small">{visit.provider}{live ? '' : " · Meera D'Souza"}</T>
                 </Grow>
                 <Pill label={STAGE_LABEL[visit.stage]} tone={visit.stage === 0 ? 'amber' : 'blue'} />
               </Between>
@@ -61,17 +63,18 @@ export default function Visits() {
               </Between>
             </Card>
           ))}
-          {done && !bookings.length && !orders.length ? <T v="small">Nothing upcoming. Book care from Find care.</T> : null}
+          {(!has || done) && !bookings.length && !orders.length ? <T v="small">Nothing upcoming. Book care from Find care.</T> : null}
         </>
       ) : (
         <>
           {done ? (
             <Card onPress={() => router.push('/visit')}>
-              <T v="label">Today · 21 Oct</T>
-              <T v="bodyB">Home nurse</T>
+              <T v="label">{visit.when}</T>
+              <T v="bodyB">{visit.service}</T>
               <T v="small">{visit.vitals ? `BP ${visit.vitals.sys}/${visit.vitals.dia}, SpO₂ ${visit.vitals.spo}%. ` : ''}{visit.note}</T>
             </Card>
           ) : null}
+          {!done && !PAST_SERVICES.length ? <T v="small">No past visits yet.</T> : null}
           {PAST_SERVICES.slice().reverse().map((p) => (
             <Card key={p.date + p.svc}>
               <T v="label">{p.date}</T>

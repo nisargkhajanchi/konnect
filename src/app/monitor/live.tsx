@@ -5,12 +5,13 @@ import { Spark } from '@/components/charts';
 import { MonStatus } from '@/components/mon-status';
 import { VGrid, VTile } from '@/components/vitals';
 import { Btn, Card, Chip, ChipRow, Row, Screen, T, TaskRow, Track } from '@/components/ui';
-import { PATIENT } from '@/data/demo';
+
 import { monFlags } from '@/logic/rules';
-import { ALERT_STEPS, useMonState, useStore } from '@/state/store';
+import { ALERT_STEPS, useMonState, useStore, usePatient } from '@/state/store';
 import { C } from '@/theme';
 
 export default function LiveMonitor() {
+  const patient = usePatient();
   const mon = useStore((s) => s.mon);
   const event = useStore((s) => s.monEvent);
   const clearAlert = useStore((s) => s.clearAlert);
@@ -20,7 +21,7 @@ export default function LiveMonitor() {
 
   return (
     <Screen>
-      <T v="h2">{PATIENT.first}, right now</T>
+      <T v="h2">{patient.first}, right now</T>
       <MonStatus st={st} extra={!mon.online ? 'connection lost' : !mon.onBed ? 'out of bed' : undefined} />
       <Row style={{ justifyContent: 'space-between', marginBottom: 11 }}>
         <T v="small">{mon.online ? '● Connected · updated just now' : '○ No signal for 5 min'}</T>

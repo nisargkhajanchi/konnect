@@ -1,0 +1,6 @@
+# Supabase CLI project config. See supabase/README.md for setup.
+project_id = "home-konnect"
+
+[functions.read-summary]
+# Only signed-in users can call the reader; the function also checks they manage the patient.
+verify_jwt = true

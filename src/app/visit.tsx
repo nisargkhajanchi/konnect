@@ -1,8 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { router } from 'expo-router';
 import { Text, View } from 'react-native';
 
-import { Between, Btn, Card, Chip, ChipRow, Row, Screen, T, TaskRow, Track } from '@/components/ui';
-import { NURSE, VISIT_CODE } from '@/data/demo';
+import { Between, Btn, Card, Chip, ChipRow, Row, Screen, Sub, T, TaskRow, Track } from '@/components/ui';
 import { useStore } from '@/state/store';
 import { C, F } from '@/theme';
 
@@ -13,47 +12,43 @@ const STEPS = [
   { name: 'Visit complete', time: 'Summary sent to you and saved in Records' },
 ];
 
-/** Family view of today's visit. Updates live from the provider side (same store). */
+/** Family view of the current visit. In live mode it updates in real time as the nurse works. */
 export default function LiveVisit() {
+  const live = useStore((s) => s.live);
   const visit = useStore((s) => s.visit);
+  const play = useStore((s) => s.playDemoVisit);
   const toast = useStore((s) => s.showToast);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
-  const play = () => {
-    const st = useStore.getState();
-    st.resetVisit();
-    timers.current.forEach(clearTimeout);
-    const seq: (() => void)[] = [
-      () => st.setStage(1),
-      () => { st.setStage(2); toast('Nurse has arrived. Share the code at the door.'); },
-      () => { st.toggleVisitTask(0); st.saveVisitVitals({ sys: 128, dia: 82, pul: 72, spo: 97 }); st.setStage(3); },
-      () => { st.toggleVisitTask(1); st.toggleVisitTask(2); },
-      () => st.completeVisit('Readings steady. Walks with light support. Medicines taken on time. Advised to keep salt low and log BP each morning.'),
-    ];
-    timers.current = seq.map((fn, i) => setTimeout(fn, 1000 * (i + 1)));
-  };
+  if (!visit.id) {
+    return (
+      <Screen>
+        <T v="h2">No visit booked yet</T>
+        <Sub>Book a nurse or physio visit and you can follow it here, live.</Sub>
+        <Btn title="Find care" onPress={() => router.push('/(tabs)/care')} />
+      </Screen>
+    );
+  }
 
   const done = visit.stage === 4;
   return (
     <Screen>
       <T v="label">Live visit</T>
-      <T v="h2">Home nurse · {done ? 'Done' : '4:30 PM'}</T>
-      <T v="small" style={{ marginBottom: 14 }}>Nurse {NURSE.name} · Sunrise Home Nursing</T>
+      <T v="h2">{visit.service} · {done ? 'Done' : visit.when.replace(/^Today, /, '')}</T>
+      <T v="small" style={{ marginBottom: 14 }}>{visit.provider}{live ? '' : " · Nurse Meera D'Souza"}</T>
       <Card>
         <Track steps={STEPS} current={visit.stage - 1} allDone={done} />
       </Card>
-      {visit.stage === 1 || visit.stage === 2 ? (
+      {(visit.stage === 1 || visit.stage === 2) && visit.code ? (
         <Card tone="teal" style={{ alignItems: 'center' }}>
           <T v="label" style={{ color: C.tealDeep }}>Share this code with the nurse</T>
           <Row gap={8} style={{ marginVertical: 8 }}>
-            {VISIT_CODE.split('').map((d, i) => (
+            {visit.code.split('').map((d, i) => (
               <View key={i} style={{ width: 46, height: 54, borderRadius: 12, backgroundColor: '#fff', borderWidth: 2, borderColor: C.teal, alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontFamily: F.monoBold, fontSize: 24, color: C.tealDeep }}>{d}</Text>
               </View>
             ))}
           </Row>
-          <T v="small">Confirms the right person is at your door.</T>
+          <T v="small">Confirms the right person is at your door. Never share it before they arrive.</T>
         </Card>
       ) : null}
       {visit.escalated ? (
@@ -81,11 +76,13 @@ export default function LiveVisit() {
       <T v="sect">Visit note</T>
       <Card><T style={{ fontSize: 13 }}>{visit.note || 'The note appears here when the nurse completes the visit.'}</T></Card>
       <Row gap={8}>
-        <Btn v="ghost" small title="Call via app" onPress={() => toast('Calling through the app. The nurse never sees your number.')} style={{ flex: 1 }} />
+        <Btn v="ghost" small title="Call via app" onPress={() => toast('In-app calling is coming soon.')} style={{ flex: 1 }} />
         <Btn v="ghost" small title="Chat" onPress={() => toast('Chat with the nurse is coming soon.')} style={{ flex: 1 }} />
-        <Btn v="teal" small title={done ? 'Replay demo' : 'Play demo'} onPress={play} style={{ flex: 1 }} />
+        {!live ? <Btn v="teal" small title={done ? 'Replay demo' : 'Play demo'} onPress={play} style={{ flex: 1 }} /> : null}
       </Row>
-      <T v="small" style={{ marginTop: 10 }}>Demo tip: sign in as a care provider to run the same visit from the nurse's side.</T>
+      <T v="small" style={{ marginTop: 10 }}>
+        {live ? 'This page updates by itself while the nurse works.' : "Demo tip: sign in as a care provider to run the same visit from the nurse's side."}
+      </T>
       {done ? (
         <View>
           <T v="sect">Rate this visit</T>
