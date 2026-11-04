@@ -23,6 +23,24 @@ The app runs in two modes:
 Building a real App Store app later uses EAS in the cloud (`npx eas-cli@latest build -p ios`), which needs
 an Apple Developer account. No Xcode required.
 
+## Try the discharge-summary reader on your own files
+
+Demo mode always shows the same sample summary. To see what Claude actually reads from a real document,
+without setting up the backend, use the command below. It sends exactly the same request as the app's
+server function and prints what the review screen would show, plus the cost.
+
+1. Get an API key at https://console.anthropic.com and set it in Terminal:
+   ```bash
+   export ANTHROPIC_API_KEY=sk-ant-...
+   ```
+2. Run it on a PDF, JPG or PNG (tip: drag the file into Terminal to paste its path):
+   ```bash
+   npm run read-summary -- ~/Downloads/discharge-summary.pdf
+   ```
+   Add `--json` at the end to see the raw result.
+
+The file is sent to Anthropic's API. Use fictional or consented documents only.
+
 ## What's in the app
 
 | Side | Screens |

@@ -101,6 +101,37 @@ Rules:
 - If the file is not a discharge summary, set is_discharge_summary to false and leave the rest empty or null.
 - Translate non-English text into plain English, keeping medicine names unchanged.`;
 
+/* ---------------- the Claude request ---------------- */
+
+export const READ_MODEL = 'claude-opus-5-5';
+
+/**
+ * Request body for client.beta.messages.create(). Shared by the edge function and the
+ * `npm run read-summary` command so both read documents exactly the same way.
+ */
+export function buildReadRequest(
+  media: 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+  base64: string,
+) {
+  const fileBlock = media === 'application/pdf'
+    ? { type: 'document' as const, source: { type: 'base64' as const, media_type: media, data: base64 } }
+    : { type: 'image' as const, source: { type: 'base64' as const, media_type: media, data: base64 } };
+  return {
+    model: READ_MODEL,
+    max_tokens: 16000,
+    // If a safety classifier declines, the API re-runs the request on Anthropic's recommended fallback model.
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default' as const,
+    // Reading medical documents is accuracy-sensitive, so use high effort (Opus 5.5 defaults to medium).
+    output_config: { effort: 'high' as const, format: { type: 'json_schema' as const, schema: EXTRACTION_SCHEMA } },
+    system: EXTRACTION_SYSTEM_PROMPT,
+    messages: [{
+      role: 'user' as const,
+      content: [fileBlock, { type: 'text' as const, text: 'Extract the discharge summary into the required format.' }],
+    }],
+  };
+}
+
 /* ---------------- validation ---------------- */
 
 export class ExtractionError extends Error {}

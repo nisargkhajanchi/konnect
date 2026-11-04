@@ -23,6 +23,7 @@
   "exclude": [
     "node_modules",
     "supabase/functions/read-summary",
-    "supabase/functions/**/*.test.ts"
+    "supabase/functions/**/*.test.ts",
+    "scripts"
   ]
 }

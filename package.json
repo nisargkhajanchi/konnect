@@ -40,6 +40,7 @@
     "zustand": "^5.0.16"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
     "@types/react": "~19.3.0",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~58.0.4",
@@ -50,7 +51,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "read-summary": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/read-summary.mts"
   },
   "private": true
 }

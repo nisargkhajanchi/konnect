@@ -14,12 +14,9 @@ import Anthropic from 'npm:@anthropic-ai/sdk@1.4.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
 import { encodeBase64 } from 'jsr:@std/encoding@1/base64';
 
-import {
-  EXTRACTION_SCHEMA, EXTRACTION_SYSTEM_PROMPT, ExtractionError, needsReview, normalizeExtraction,
-} from '../_shared/extraction.ts';
+import { buildReadRequest, ExtractionError, needsReview, normalizeExtraction } from '../_shared/extraction.ts';
 import { sniffMediaType } from '../_shared/media.ts';
 
-const MODEL = 'claude-opus-5-5';
 const MAX_BYTES = 20 * 1024 * 1024; // well under the 32 MB request limit after base64
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -80,26 +77,8 @@ Deno.serve(async (req) => {
     const media = sniffMediaType(bytes);
     if (!media) throw new UserFacingError('Please upload a PDF, JPG or PNG. Other formats (such as HEIC) are not supported yet.', 415);
 
-    const data = encodeBase64(bytes);
-    const fileBlock: Anthropic.Beta.BetaContentBlockParam = media === 'application/pdf'
-      ? { type: 'document', source: { type: 'base64', media_type: media, data } }
-      : { type: 'image', source: { type: 'base64', media_type: media, data } };
-
     const client = new Anthropic({ apiKey: anthropicKey, timeout: 120_000, maxRetries: 1 });
-    const response = await client.beta.messages.create({
-      model: MODEL,
-      max_tokens: 16000,
-      // If a safety classifier declines, the API re-runs the request on Anthropic's recommended fallback model.
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      // Reading medical documents is accuracy-sensitive, so use high effort (Opus 5.5 defaults to medium).
-      output_config: { effort: 'high', format: { type: 'json_schema', schema: EXTRACTION_SCHEMA } },
-      system: EXTRACTION_SYSTEM_PROMPT,
-      messages: [{
-        role: 'user',
-        content: [fileBlock, { type: 'text', text: 'Extract the discharge summary into the required format.' }],
-      }],
-    });
+    const response = await client.beta.messages.create(buildReadRequest(media, encodeBase64(bytes)));
 
     // Log sizes and outcome only. Never log document content.
     console.log(JSON.stringify({ fn: 'read-summary', model: response.model, stop: response.stop_reason, in: response.usage.input_tokens, out: response.usage.output_tokens }));
